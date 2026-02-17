@@ -38,29 +38,28 @@ psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE ai_agents TO aidev;"
 
 ### 4. Configure Environment Variables
 
-Create a `.env.development` file:
+Create a `.env.development` file (example):
 
 ```bash
 # Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=
-DB_NAME=ai_agents
-DB_SSL_MODE=disable
+DATABASE_URL=postgres://aidev:devpassword@localhost:5432/ai_agents?sslmode=disable
 
 # Server
 SERVER_PORT=8080
-SERVER_LISTEN_ADDR=:8080
-
-# Agent Monitoring
-AGENT_HEARTBEAT_TIMEOUT=30
-AGENT_CHECKER_INTERVAL=5
+OFFLINE_TIMEOUT_SECONDS=90
+OFFLINE_CHECK_INTERVAL_SECONDS=30
+AGENT_JWT_SECRET=dev_agent_secret
+ADMIN_JWT_SECRET=dev_admin_secret
+ADMIN_JWT_TTL_SECONDS=3600
 
 # Agent
 SERVER_URL=http://localhost:8080
-HEARTBEAT_INTERVAL=30s
-REQUEST_TIMEOUT=10s
+HEARTBEAT_INTERVAL_SECONDS=30
+REQUEST_TIMEOUT_SECONDS=10
+AGENT_JWT_SECRET=dev_agent_secret
+AGENT_JWT_TTL_SECONDS=300
+COMMAND_POLL_INTERVAL_SECONDS=30
+COMMAND_TIMEOUT_SECONDS=60
 ```
 
 Source it before running:
@@ -104,8 +103,10 @@ go build -o bin/agent ./cmd/agent && go build -o bin/server ./cmd/server
 ### Terminal 1: Start Server
 
 ```bash
-export DB_HOST=localhost
+export DATABASE_URL=postgres://aidev:devpassword@localhost:5432/ai_agents?sslmode=disable
 export SERVER_PORT=8080
+export AGENT_JWT_SECRET=dev_agent_secret
+export ADMIN_JWT_SECRET=dev_admin_secret
 go run ./cmd/server
 ```
 
@@ -120,6 +121,7 @@ Expected output:
 
 ```bash
 export SERVER_URL=http://localhost:8080
+export AGENT_JWT_SECRET=dev_agent_secret
 go run ./cmd/agent
 ```
 
@@ -134,8 +136,13 @@ Expected output:
 ### Terminal 3: View Web UI
 
 ```bash
-open http://localhost:8080/agents
+open http://localhost:8080/
 ```
+
+Default admin login
+- Username: `admin`
+- Password: `admin`
+- You will be prompted to change the password on first login.
 
 ## Code Organization
 
@@ -148,8 +155,11 @@ cmd/
 └── server/
     ├── main.go          # Server entry point, routing
     └── templates/       # HTML templates for web UI
-        ├── agents-list.html
-        └── agent-detail.html
+        ├── agents.html
+        ├── agent-detail.html
+        ├── login.html
+        ├── change-password.html
+        └── session-timeout.html
 ```
 
 ### internal/ - Core Logic

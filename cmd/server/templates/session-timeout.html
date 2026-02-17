@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Timed Out</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-1: #0f172a;
+            --bg-2: #111827;
+            --accent: #38bdf8;
+            --surface: #ffffff;
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: #e2e8f0;
+            --shadow: rgba(15, 23, 42, 0.18);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+            background: radial-gradient(circle at top right, #0f172a 0%, #0b1023 45%, #020617 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            color: var(--ink);
+        }
+
+        .card {
+            width: min(480px, 100%);
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 18px 40px var(--shadow);
+            border: 1px solid var(--line);
+        }
+
+        h1 {
+            font-size: 26px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 22px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        input {
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            font-size: 15px;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: none;
+            background: var(--accent);
+            color: #0f172a;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .note {
+            margin-top: 18px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Session Timed Out</h1>
+        <div class="subtitle">For security, please sign in again to continue.</div>
+
+        <form method="post" action="/login">
+            <div class="field">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" autocomplete="username" required />
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+            {{if .Next}}
+            <input type="hidden" name="next" value="{{.Next}}" />
+            {{end}}
+            <button type="submit">Reauthenticate</button>
+        </form>
+        <div class="note">Your session expired. Re-enter your credentials to continue.</div>
+    </div>
+</body>
+</html>

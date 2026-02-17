@@ -101,18 +101,18 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 // MarkAgentsOffline sets agents whose last_seen is before the cutoff to 'offline'.
 // Returns the number of agents updated.
 func MarkAgentsOffline(ctx context.Context, cutoff time.Time) (int64, error) {
-		query := `
+	query := `
 		UPDATE agents
 		SET status = 'offline', updated_at = CURRENT_TIMESTAMP
 		WHERE last_seen < $1
 			AND status <> 'offline'
 		`
 
-		cmdTag, err := DB.Exec(ctx, query, cutoff)
-		if err != nil {
-				log.Printf("Error marking agents offline: %v", err)
-				return 0, fmt.Errorf("database error: %w", err)
-		}
+	cmdTag, err := DB.Exec(ctx, query, cutoff)
+	if err != nil {
+		log.Printf("Error marking agents offline: %v", err)
+		return 0, fmt.Errorf("database error: %w", err)
+	}
 
-		return cmdTag.RowsAffected(), nil
+	return cmdTag.RowsAffected(), nil
 }

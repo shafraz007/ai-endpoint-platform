@@ -18,6 +18,14 @@ var migrations = []Migration{
 		Name: "001_create_agents_table_v1_0_0",
 		Up:   createAgentsTableV1,
 	},
+	{
+		Name: "002_create_agent_commands_table_v1_1_0",
+		Up:   createAgentCommandsTableV1,
+	},
+	{
+		Name: "003_create_users_table_v1_2_0",
+		Up:   createUsersTableV1,
+	},
 }
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -146,11 +154,58 @@ func createAgentsTableV1(ctx context.Context, db *pgxpool.Pool) error {
 	return err
 }
 
+func createAgentCommandsTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS agent_commands (
+		id BIGSERIAL PRIMARY KEY,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		command_type VARCHAR(50) NOT NULL,
+		payload TEXT,
+		status VARCHAR(20) NOT NULL DEFAULT 'queued',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		dispatched_at TIMESTAMP,
+		completed_at TIMESTAMP,
+		output TEXT,
+		error TEXT
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_commands_agent_id ON agent_commands(agent_id);
+	CREATE INDEX IF NOT EXISTS idx_agent_commands_status ON agent_commands(status);
+	CREATE INDEX IF NOT EXISTS idx_agent_commands_created_at ON agent_commands(created_at);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createUsersTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS users (
+		id SERIAL PRIMARY KEY,
+		username VARCHAR(255) UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		role VARCHAR(50) NOT NULL DEFAULT 'admin',
+		must_change_password BOOLEAN NOT NULL DEFAULT true,
+		last_login TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+	CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
 // RecreateAndRunMigrations drops existing migration state and tables then
 // re-applies all migrations from scratch. Use with caution on production.
 func RecreateAndRunMigrations(ctx context.Context, db *pgxpool.Pool) error {
 	// Drop tables that may have been created by previous runs
 	dropQuery := `
+	DROP TABLE IF EXISTS agent_commands CASCADE;
 	DROP TABLE IF EXISTS agents CASCADE;
 	DROP TABLE IF EXISTS schema_migrations CASCADE;
 	`

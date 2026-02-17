@@ -17,15 +17,15 @@ const agentVersion = "1.0.0"
 
 // SystemInfo contains system information collected from the agent
 type SystemInfo struct {
-	AgentID              string
-	Hostname             string
-	Domain               string
-	PublicIP             string
-	PrivateIP            string
-	LastLogin            *time.Time
-	LastReboot           *time.Time
-	Timezone             string
-	AgentVersion         string
+	AgentID      string
+	Hostname     string
+	Domain       string
+	PublicIP     string
+	PrivateIP    string
+	LastLogin    *time.Time
+	LastReboot   *time.Time
+	Timezone     string
+	AgentVersion string
 	// Hardware Information
 	HardwareVendor       string
 	HardwareModel        string
@@ -43,8 +43,8 @@ type SystemInfo struct {
 	// Physical Disks and Logical Drives JSON (stringified)
 	// DisksJSON contains physical disk information (hardware devices)
 	// DrivesJSON contains logical drives/volumes (mounted partitions like C:, D:, etc)
-	DisksJSON            string
-	DrivesJSON           string
+	DisksJSON  string
+	DrivesJSON string
 }
 
 // GetSystemInfo collects system information from the agent
@@ -122,9 +122,9 @@ func GetSystemInfo() (*SystemInfo, error) {
 // getWindowsPhysicalDisksJSON queries physical disks and returns JSON array string.
 // Physical disks represent actual hardware devices (disk drives) on the system.
 func getWindowsPhysicalDisksJSON() string {
-    // Use PowerShell to query physical disk information via WMI
-    // Parse the output in Go and manually build JSON for reliability
-    psScript := `
+	// Use PowerShell to query physical disk information via WMI
+	// Parse the output in Go and manually build JSON for reliability
+	psScript := `
 $ErrorActionPreference = 'SilentlyContinue'
 try {
     $physicalDisks = @(Get-WmiObject Win32_DiskDrive -ErrorAction SilentlyContinue)
@@ -134,54 +134,54 @@ try {
 } catch {
 }
 `
-    
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
 
-    cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NoLogo", "-NonInteractive", "-Command", psScript)
-    output, err := cmd.Output()
-    if err != nil {
-        // Silently return empty array - drives will still work
-        return "[]"
-    }
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-    lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-    var disks []map[string]interface{}
-    
-    for _, line := range lines {
-        line = strings.TrimSpace(line)
-        if line == "" {
-            continue
-        }
-        
-        parts := strings.Split(line, "|")
-        if len(parts) >= 6 {
-            var idx, size, partitions int64
-            fmt.Sscanf(parts[0], "%d", &idx)
-            fmt.Sscanf(parts[2], "%d", &size)
-            fmt.Sscanf(parts[5], "%d", &partitions)
-            
-            disk := map[string]interface{}{
-                "Index":         idx,
-                "Model":         parts[1],
-                "Size":          size,
-                "InterfaceType": parts[3],
-                "Status":        parts[4],
-                "Partitions":    partitions,
-            }
-            disks = append(disks, disk)
-        }
-    }
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NoLogo", "-NonInteractive", "-Command", psScript)
+	output, err := cmd.Output()
+	if err != nil {
+		// Silently return empty array - drives will still work
+		return "[]"
+	}
 
-    b, _ := json.Marshal(disks)
-    return string(b)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var disks []map[string]interface{}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) >= 6 {
+			var idx, size, partitions int64
+			fmt.Sscanf(parts[0], "%d", &idx)
+			fmt.Sscanf(parts[2], "%d", &size)
+			fmt.Sscanf(parts[5], "%d", &partitions)
+
+			disk := map[string]interface{}{
+				"Index":         idx,
+				"Model":         parts[1],
+				"Size":          size,
+				"InterfaceType": parts[3],
+				"Status":        parts[4],
+				"Partitions":    partitions,
+			}
+			disks = append(disks, disk)
+		}
+	}
+
+	b, _ := json.Marshal(disks)
+	return string(b)
 }
 
 // getWindowsLogicalDrivesJSON queries logical drives (volumes) and returns JSON array with capacity info.
 // Logical drives represent partitions/volumes mounted on the system (C:, D:, etc.)
 func getWindowsLogicalDrivesJSON() string {
-    // Use PowerShell to query logical disk information with timeout and error handling
-    psScript := `
+	// Use PowerShell to query logical disk information with timeout and error handling
+	psScript := `
 $ErrorActionPreference = 'SilentlyContinue'
 $drives = @()
 try {
@@ -213,28 +213,28 @@ try {
 }
 `
 
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-    cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", psScript)
-    output, err := cmd.Output()
-    if err != nil {
-        // Silently return empty array
-        return "[]"
-    }
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", psScript)
+	output, err := cmd.Output()
+	if err != nil {
+		// Silently return empty array
+		return "[]"
+	}
 
-    jsonStr := strings.TrimSpace(string(output))
-    if jsonStr == "" || jsonStr == "null" || jsonStr == "[]" {
-        return "[]"
-    }
+	jsonStr := strings.TrimSpace(string(output))
+	if jsonStr == "" || jsonStr == "null" || jsonStr == "[]" {
+		return "[]"
+	}
 
-    // Validate that output is valid JSON
-    var result interface{}
-    if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-        return "[]"
-    }
+	// Validate that output is valid JSON
+	var result interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return "[]"
+	}
 
-    return jsonStr
+	return jsonStr
 }
 
 func getDomain() string {
@@ -512,7 +512,7 @@ func getWindowsMemory() string {
 	// Get ComputerSystem.TotalPhysicalMemory and convert to GB
 	output := runWMIQuery("ComputerSystem", "TotalPhysicalMemory")
 	memBytes := strings.TrimSpace(output)
-	
+
 	// Parse bytes and convert to GB
 	var bytes int64
 	fmt.Sscanf(memBytes, "%d", &bytes)

@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Details - {{.Agent.Hostname}}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-1: #0f2027;
+            --bg-2: #2c5364;
+            --accent: #1f6f78;
+            --accent-strong: #ff8a3d;
+            --surface: #ffffff;
+            --ink: #1f2933;
+            --muted: #5f6c75;
+            --line: #e6eaed;
+            --shadow: rgba(0, 0, 0, 0.12);
+            --code-bg: #f1f4f6;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,10 +27,11 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
             min-height: 100vh;
             padding: 20px;
+            color: var(--ink);
         }
 
         .container {
@@ -25,15 +41,15 @@
 
         .back-button {
             display: inline-block;
-            background: white;
-            color: #667eea;
+            background: var(--surface);
+            color: var(--accent);
             padding: 10px 20px;
             border-radius: 5px;
             text-decoration: none;
             margin-bottom: 20px;
             font-weight: 500;
             transition: all 0.3s;
-            border: 2px solid white;
+            border: 2px solid var(--surface);
         }
 
         .back-button:hover {
@@ -42,10 +58,10 @@
         }
 
         header {
-            background: white;
+            background: var(--surface);
             padding: 30px;
             border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 14px var(--shadow);
             margin-bottom: 30px;
         }
 
@@ -59,7 +75,7 @@
         }
 
         h1 {
-            color: #333;
+            color: var(--ink);
             font-size: 2em;
             margin: 0;
         }
@@ -91,14 +107,14 @@
         }
 
         .detail-card {
-            background: #f8f9fa;
+            background: #f7f9fa;
             padding: 20px;
             border-radius: 8px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid var(--accent);
         }
 
         .detail-card h3 {
-            color: #333;
+            color: var(--ink);
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -107,19 +123,19 @@
         }
 
         .detail-card .value {
-            color: #333;
+            color: var(--ink);
             font-size: 16px;
             font-weight: 500;
             word-break: break-all;
         }
 
         .detail-card .value.code {
-            background: white;
+            background: var(--surface);
             padding: 10px;
             border-radius: 4px;
-            font-family: 'Courier New', monospace;
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
             font-size: 13px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--line);
             overflow-x: auto;
         }
 
@@ -134,12 +150,23 @@
 
         /* Tabs styling */
         .tabs {
-            background: white;
+            background: var(--surface);
             border-radius: 10px 10px 0 0;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 14px var(--shadow);
             display: flex;
-            border-bottom: 2px solid #f0f0f0;
+            align-items: center;
+            border-bottom: 2px solid var(--line);
             margin-bottom: 0;
+        }
+
+        .tabs-actions {
+            margin-left: auto;
+            padding: 0 16px 0 0;
+        }
+
+        .tabs-actions .ghost-btn {
+            padding: 8px 14px;
+            font-size: 12px;
         }
 
         .tab-button {
@@ -148,7 +175,7 @@
             padding: 20px 30px;
             font-size: 16px;
             cursor: pointer;
-            color: #666;
+            color: var(--muted);
             font-weight: 500;
             border-bottom: 3px solid transparent;
             margin-bottom: -2px;
@@ -156,13 +183,13 @@
         }
 
         .tab-button:hover {
-            color: #667eea;
-            background: #f8f9fa;
+            color: var(--accent);
+            background: #f1f4f6;
         }
 
         .tab-button.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+            color: var(--accent);
+            border-bottom-color: var(--accent);
         }
 
         .tab-content {
@@ -174,10 +201,10 @@
         }
 
         .info-section {
-            background: white;
+            background: var(--surface);
             padding: 30px;
             border-radius: 0 10px 10px 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 14px var(--shadow);
             margin-bottom: 20px;
         }
 
@@ -187,17 +214,17 @@
         }
 
         .info-section h2 {
-            color: #333;
+            color: var(--ink);
             margin-bottom: 20px;
             font-size: 1.3em;
-            border-bottom: 2px solid #f0f0f0;
+            border-bottom: 2px solid var(--line);
             padding-bottom: 10px;
         }
 
         .info-row {
             display: flex;
             padding: 15px 0;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--line);
         }
 
         .info-row:last-child {
@@ -206,7 +233,7 @@
 
         .info-label {
             flex: 0 0 200px;
-            color: #666;
+            color: var(--muted);
             font-weight: 600;
             text-transform: uppercase;
             font-size: 12px;
@@ -215,15 +242,15 @@
 
         .info-value {
             flex: 1;
-            color: #333;
+            color: var(--ink);
             font-size: 15px;
         }
 
         .info-value.code {
-            background: #f5f5f5;
+            background: var(--code-bg);
             padding: 10px;
             border-radius: 4px;
-            font-family: 'Courier New', monospace;
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
             font-size: 13px;
             overflow-x: auto;
         }
@@ -238,6 +265,222 @@
             color: white;
             margin-top: 30px;
             font-size: 13px;
+        }
+
+        .commands-panel {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .commands-panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top right, rgba(255, 138, 61, 0.15), transparent 60%);
+            pointer-events: none;
+        }
+
+        .commands-grid {
+            display: grid;
+            grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.4fr);
+            gap: 24px;
+        }
+
+        .commands-form,
+        .commands-list {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+            position: relative;
+            z-index: 1;
+        }
+
+        .commands-form h3,
+        .commands-list h3 {
+            margin-bottom: 16px;
+            font-size: 16px;
+            color: var(--ink);
+        }
+
+        .field-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .field-row label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .field-row input,
+        .field-row select,
+        .field-row textarea {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+            font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+        }
+
+        .field-row textarea {
+            min-height: 90px;
+            resize: vertical;
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+        }
+
+        .token-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+        }
+
+        .primary-btn,
+        .ghost-btn {
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+
+        .primary-btn {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 10px 18px rgba(31, 111, 120, 0.35);
+        }
+
+        .primary-btn:hover {
+            background: #1a5e66;
+        }
+
+        .ghost-btn {
+            background: var(--code-bg);
+            color: var(--accent);
+            border: 1px solid var(--line);
+        }
+
+        .ghost-btn:hover {
+            border-color: var(--accent);
+        }
+
+        .command-status {
+            margin-top: 12px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .command-status.ok {
+            color: #1c7c54;
+        }
+
+        .command-status.error {
+            color: #b43c3c;
+        }
+
+        .commands-list-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .commands-table {
+            display: grid;
+            gap: 14px;
+        }
+
+        .command-card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 12px 14px;
+            background: #fbfcfd;
+        }
+
+        .command-card header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .command-meta {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .command-type {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .command-badge {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-weight: 600;
+        }
+
+        .badge-queued {
+            background: #fff2d9;
+            color: #8a5a12;
+        }
+
+        .badge-dispatched {
+            background: #e6f5ff;
+            color: #0f5a8a;
+        }
+
+        .badge-succeeded {
+            background: #dff5e6;
+            color: #1c7c54;
+        }
+
+        .badge-failed {
+            background: #fde2e2;
+            color: #b43c3c;
+        }
+
+        .command-output {
+            margin-top: 8px;
+            padding: 10px;
+            border-radius: 8px;
+            background: var(--code-bg);
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        @media (max-width: 900px) {
+            .commands-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .info-row {
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .info-label {
+                flex: none;
+            }
         }
     </style>
 </head>
@@ -272,6 +515,10 @@
             <button class="tab-button active" onclick="switchTab('overview', this)">📋 Overview</button>
             <button class="tab-button" onclick="switchTab('hardware', this)">🖥️ Hardware</button>
             <button class="tab-button" onclick="switchTab('disks', this)">💽 Disks</button>
+            <button class="tab-button" onclick="switchTab('commands', this)">🧭 Commands</button>
+            <div class="tabs-actions">
+                <button id="logout-button" class="ghost-btn" type="button">Logout</button>
+            </div>
         </div>
 
         <!-- Overview Tab Content -->
@@ -346,6 +593,44 @@
 
                 <div id="disks-container">
                     <p class="empty">No disk information available.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Commands Tab Content -->
+        <div id="commands" class="tab-content">
+            <div class="info-section commands-panel">
+                <h2>Command Center</h2>
+                <div class="commands-grid">
+                    <div class="commands-form">
+                        <h3>Queue a Command</h3>
+                        <div class="field-row">
+                            <label for="command-type">Command Type</label>
+                            <select id="command-type">
+                                <option value="ping">ping</option>
+                                <option value="echo">echo</option>
+                                <option value="shell">shell</option>
+                                <option value="restart">restart</option>
+                                <option value="shutdown">shutdown</option>
+                            </select>
+                        </div>
+                        <div class="field-row" id="payload-row">
+                            <label for="command-payload">Payload</label>
+                            <textarea id="command-payload" placeholder="Enter payload or shell command"></textarea>
+                        </div>
+                        <button id="send-command" class="primary-btn" type="button">Send Command</button>
+                        <div id="command-status" class="command-status"></div>
+                    </div>
+                    <div class="commands-list">
+                        <div class="commands-list-header">
+                            <h3>Recent Commands</h3>
+                            <div>
+                                <button id="refresh-commands" class="ghost-btn" type="button">Refresh</button>
+                            </div>
+                        </div>
+                        <div id="commands-empty" class="empty">No commands yet.</div>
+                        <div id="commands-table" class="commands-table"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -431,6 +716,7 @@
         // Parse disk and drive JSON from template data (safe HTML/JS variables)
         let disksData = {{.DisksJSON}};
         let drivesData = {{.DrivesJSON}};
+        const agentId = "{{.Agent.AgentID}}";
         
         function switchTab(tabName, btn) {
             // Hide all tab contents
@@ -454,9 +740,170 @@
             // Add active class to clicked button
             if (btn) btn.classList.add('active');
         }
+        function setCommandStatus(message, type) {
+            const statusEl = document.getElementById('command-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'command-status' + (type ? ' ' + type : '');
+        }
+
+        async function logoutAdmin() {
+            await fetch('/admin/logout', { method: 'POST' });
+        }
+
+        function formatTimestamp(value) {
+            if (!value) return 'n/a';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return 'n/a';
+            return date.toLocaleString();
+        }
+
+        function renderCommands(commands) {
+            const emptyEl = document.getElementById('commands-empty');
+            const tableEl = document.getElementById('commands-table');
+            if (!tableEl || !emptyEl) return;
+
+            tableEl.innerHTML = '';
+            if (!commands || commands.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            emptyEl.style.display = 'none';
+            commands.forEach(command => {
+                const card = document.createElement('div');
+                card.className = 'command-card';
+
+                const header = document.createElement('header');
+                const left = document.createElement('div');
+                const typeEl = document.createElement('div');
+                typeEl.className = 'command-type';
+                typeEl.textContent = command.command_type;
+
+                const metaEl = document.createElement('div');
+                metaEl.className = 'command-meta';
+                metaEl.textContent = 'ID ' + command.id + ' · ' + formatTimestamp(command.created_at);
+
+                left.appendChild(typeEl);
+                left.appendChild(metaEl);
+
+                const badge = document.createElement('span');
+                const status = (command.status || 'queued').toLowerCase();
+                badge.className = 'command-badge badge-' + status;
+                badge.textContent = status;
+
+                header.appendChild(left);
+                header.appendChild(badge);
+                card.appendChild(header);
+
+                if (command.payload) {
+                    const payload = document.createElement('div');
+                    payload.className = 'command-meta';
+                    payload.textContent = 'Payload: ' + command.payload;
+                    card.appendChild(payload);
+                }
+
+                if (command.output) {
+                    const output = document.createElement('div');
+                    output.className = 'command-output';
+                    output.textContent = command.output;
+                    card.appendChild(output);
+                }
+
+                if (command.error) {
+                    const error = document.createElement('div');
+                    error.className = 'command-output';
+                    error.textContent = command.error;
+                    card.appendChild(error);
+                }
+
+                tableEl.appendChild(card);
+            });
+        }
+
+        async function loadCommands() {
+            try {
+                const response = await fetch('/api/commands?agent_id=' + encodeURIComponent(agentId) + '&limit=20', {
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Command list failed: ' + response.status);
+                }
+
+                const data = await response.json();
+                renderCommands(data);
+                setCommandStatus('Commands refreshed.', 'ok');
+            } catch (err) {
+                setCommandStatus(err.message || 'Failed to load commands.', 'error');
+            }
+        }
+
+        async function queueCommand() {
+            const typeInput = document.getElementById('command-type');
+            const payloadInput = document.getElementById('command-payload');
+
+            if (!typeInput || !payloadInput) return;
+
+            const commandType = typeInput.value;
+            const payload = payloadInput.value.trim();
+            if ((commandType === 'echo' || commandType === 'shell') && payload === '') {
+                setCommandStatus('Payload is required for echo and shell commands.', 'error');
+                return;
+            }
+            if ((commandType === 'restart' || commandType === 'shutdown') && !confirm(`Are you sure you want to ${commandType} the system?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/commands', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        agent_id: agentId,
+                        command_type: commandType,
+                        payload: payload,
+                    }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Command request failed: ' + response.status);
+                }
+
+                setCommandStatus('Command queued successfully.', 'ok');
+                payloadInput.value = '';
+                await loadCommands();
+            } catch (err) {
+                setCommandStatus(err.message || 'Failed to queue command.', 'error');
+            }
+        }
+
+        function togglePayloadVisibility() {
+            const typeInput = document.getElementById('command-type');
+            const payloadRow = document.getElementById('payload-row');
+            if (!typeInput || !payloadRow) return;
+            const hidePayload = ['ping', 'restart', 'shutdown'].includes(typeInput.value);
+            payloadRow.style.display = hidePayload ? 'none' : 'block';
+        }
+
         // Render disks and drives after DOM loaded
         window.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('disks-container');
+            const logoutButton = document.getElementById('logout-button');
+            const refreshButton = document.getElementById('refresh-commands');
+            const sendButton = document.getElementById('send-command');
+            const typeInput = document.getElementById('command-type');
 
             if (!container) return;
 
@@ -518,6 +965,25 @@
             }
 
             container.innerHTML = html;
+
+            if (logoutButton) {
+                logoutButton.addEventListener('click', async function() {
+                    await logoutAdmin();
+                    window.location.href = '/';
+                });
+            }
+            if (refreshButton) {
+                refreshButton.addEventListener('click', loadCommands);
+            }
+            if (sendButton) {
+                sendButton.addEventListener('click', queueCommand);
+            }
+            if (typeInput) {
+                typeInput.addEventListener('change', togglePayloadVisibility);
+                togglePayloadVisibility();
+            }
+
+            loadCommands();
         });
     </script>
 </body>

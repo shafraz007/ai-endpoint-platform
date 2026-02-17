@@ -13,8 +13,13 @@ type ServerConfig struct {
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	MaxHeaderBytes int
+	AgentJWTSecret string
+	AdminJWTSecret string
+	AdminJWTTTL    time.Duration
+	LogDir         string
+	LogToConsole   bool
 	// Time after which an agent is considered offline
-	OfflineTimeout      time.Duration
+	OfflineTimeout time.Duration
 	// Interval to run offline checks
 	OfflineCheckInterval time.Duration
 }
@@ -25,16 +30,27 @@ type AgentConfig struct {
 	RequestTimeout      time.Duration
 	MaxRetries          int
 	RetryBackoffSeconds time.Duration
+	JWTSecret           string
+	JWTTTL              time.Duration
+	CommandPollInterval time.Duration
+	CommandTimeout      time.Duration
+	LogDir              string
+	LogToConsole        bool
 }
 
 func LoadServerConfig() ServerConfig {
 	return ServerConfig{
-		Port:           getEnv("SERVER_PORT", "8070"),
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://aiuser:aipassword@localhost:5432/aiendpoint?sslmode=disable"),
-		ReadTimeout:    getDurationEnv("READ_TIMEOUT_SECONDS", 15) * time.Second,
-		WriteTimeout:   getDurationEnv("WRITE_TIMEOUT_SECONDS", 15) * time.Second,
-		MaxHeaderBytes: getIntEnv("MAX_HEADER_BYTES", 1024*1024),
-		OfflineTimeout:      getDurationEnv("OFFLINE_TIMEOUT_SECONDS", 90) * time.Second,
+		Port:                 getEnv("SERVER_PORT", "8070"),
+		DatabaseURL:          getEnv("DATABASE_URL", "postgres://aiuser:aipassword@localhost:5432/aiendpoint?sslmode=disable"),
+		ReadTimeout:          getDurationEnv("READ_TIMEOUT_SECONDS", 15) * time.Second,
+		WriteTimeout:         getDurationEnv("WRITE_TIMEOUT_SECONDS", 15) * time.Second,
+		MaxHeaderBytes:       getIntEnv("MAX_HEADER_BYTES", 1024*1024),
+		AgentJWTSecret:       getEnv("AGENT_JWT_SECRET", ""),
+		AdminJWTSecret:       getEnv("ADMIN_JWT_SECRET", ""),
+		AdminJWTTTL:          getDurationEnv("ADMIN_JWT_TTL_SECONDS", 3600) * time.Second,
+		LogDir:               getEnv("LOG_DIR", "logs"),
+		LogToConsole:         getBoolEnv("LOG_TO_CONSOLE", true),
+		OfflineTimeout:       getDurationEnv("OFFLINE_TIMEOUT_SECONDS", 90) * time.Second,
 		OfflineCheckInterval: getDurationEnv("OFFLINE_CHECK_INTERVAL_SECONDS", 30) * time.Second,
 	}
 }
@@ -46,6 +62,12 @@ func LoadAgentConfig() AgentConfig {
 		RequestTimeout:      getDurationEnv("REQUEST_TIMEOUT_SECONDS", 10) * time.Second,
 		MaxRetries:          getIntEnv("MAX_RETRIES", 3),
 		RetryBackoffSeconds: getDurationEnv("RETRY_BACKOFF_SECONDS", 2) * time.Second,
+		JWTSecret:           getEnv("AGENT_JWT_SECRET", ""),
+		JWTTTL:              getDurationEnv("AGENT_JWT_TTL_SECONDS", 300) * time.Second,
+		CommandPollInterval: getDurationEnv("COMMAND_POLL_INTERVAL_SECONDS", 30) * time.Second,
+		CommandTimeout:      getDurationEnv("COMMAND_TIMEOUT_SECONDS", 60) * time.Second,
+		LogDir:              getEnv("LOG_DIR", "logs"),
+		LogToConsole:        getBoolEnv("LOG_TO_CONSOLE", true),
 	}
 }
 
@@ -72,6 +94,17 @@ func getIntEnv(key string, defaultValue int) int {
 			return parsed
 		}
 		log.Printf("Invalid integer for %s, using default: %d\n", key, defaultValue)
+	}
+	return defaultValue
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err == nil {
+			return parsed
+		}
+		log.Printf("Invalid boolean for %s, using default: %t\n", key, defaultValue)
 	}
 	return defaultValue
 }

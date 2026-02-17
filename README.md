@@ -44,12 +44,14 @@ A distributed agent-server architecture for comprehensive endpoint monitoring an
 - ✅ Agent status tracking (online/offline)
 - ✅ Automatic offline detection (30-second timeout)
 - ✅ REST API endpoints for agent management
-- ✅ Web UI with tabbed interface (Overview, Hardware, Disks)
+- ✅ Web UI with tabbed interface (Overview, Hardware, Disks, Commands)
 - ✅ Real-time status indicators
+- ✅ Admin login with DB-backed users and session cookies
+- ✅ Commands queue (server → agent) with acknowledgements
+- ✅ Daily rotating logs for server and agent
 
 ### Planned Features (v1.1.0+)
 
-- 🔲 Commands from server → agent
 - 🔲 Real-time data streaming
 - 🔲 Agent grouping/policies
 - 🔲 Advanced monitoring (alerts, thresholds)
@@ -101,6 +103,12 @@ HEARTBEAT_INTERVAL_SECONDS=30
 REQUEST_TIMEOUT_SECONDS=10
 MAX_RETRIES=3
 RETRY_BACKOFF_SECONDS=2
+AGENT_JWT_SECRET=your_agent_shared_secret
+AGENT_JWT_TTL_SECONDS=300
+COMMAND_POLL_INTERVAL_SECONDS=30
+COMMAND_TIMEOUT_SECONDS=60
+LOG_DIR=logs
+LOG_TO_CONSOLE=true
 ```
 
 ### Server Environment Variables
@@ -109,7 +117,19 @@ DATABASE_URL=postgres://ai_endpoint_user:your_password@localhost:5432/ai_agents?
 SERVER_PORT=8080
 OFFLINE_TIMEOUT_SECONDS=90
 OFFLINE_CHECK_INTERVAL_SECONDS=30
+AGENT_JWT_SECRET=your_agent_shared_secret
+ADMIN_JWT_SECRET=your_admin_shared_secret
+ADMIN_JWT_TTL_SECONDS=3600
+LOG_DIR=logs
+LOG_TO_CONSOLE=true
 ```
+
+### Admin Login
+
+- Login page: `GET /`
+- Session timeout page: `GET /session-timeout`
+- Session is stored in an HttpOnly cookie and refreshed on each authenticated request.
+- Default admin user (first run): username `admin`, password `admin` (forced change on first login).
 
 ## Offline Detection
 
@@ -130,6 +150,37 @@ Agent status updated to "offline" in database and reflected in UI.
 
 ### Other Platforms
 - Linux/macOS implementations coming in v1.1.0
+
+## Commands (Server to Agent)
+
+The server can queue commands for agents. Agents poll for commands and acknowledge results.
+
+### JWT Requirements
+
+- Agent tokens must include `sub=<agent_id>` and `role=agent`.
+- Admin tokens must include `role=admin`.
+- Both are signed with HS256 using `AGENT_JWT_SECRET` (agent) and `ADMIN_JWT_SECRET` (admin).
+
+### Endpoints
+
+- `POST /login` - username/password login (form)
+- `POST /admin/login` - username/password login (JSON for API clients)
+- `POST /admin/logout` - clear admin session cookie
+- `GET /session-timeout` - re-authenticate when session expires
+- `POST /api/commands` (admin) - create a command
+- `GET /api/commands?agent_id=...` (admin) - list recent commands
+- `GET /api/commands/next` (agent) - poll for next command
+- `POST /api/commands/ack` (agent) - acknowledge execution
+
+### Command Types
+
+- `ping` - returns `pong`
+- `echo` - returns payload as output
+- `shell` - executes payload as a shell command
+- `restart` - initiates system restart
+- `shutdown` - initiates system shutdown
+
+On Windows, PowerShell commands are supported by prefixing with PowerShell cmdlets (e.g., `Get-Process`).
 
 ## Project Structure
 

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,13 +14,18 @@ import (
 	"time"
 
 	"github.com/shafraz007/ai-endpoint-platform/internal/config"
+	"github.com/shafraz007/ai-endpoint-platform/internal/logging"
 	"github.com/shafraz007/ai-endpoint-platform/internal/migrations"
 	"github.com/shafraz007/ai-endpoint-platform/internal/server"
 	"github.com/shafraz007/ai-endpoint-platform/internal/transport"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var agentsTemplate *template.Template
 var detailTemplate *template.Template
+var loginTemplate *template.Template
+var changePasswordTemplate *template.Template
+var sessionTimeoutTemplate *template.Template
 
 func init() {
 	var err error
@@ -31,6 +37,21 @@ func init() {
 	detailTemplate, err = template.ParseFiles("cmd/server/templates/agent-detail.html")
 	if err != nil {
 		log.Printf("Warning: Failed to parse agent-detail template: %v", err)
+	}
+
+	loginTemplate, err = template.ParseFiles("cmd/server/templates/login.html")
+	if err != nil {
+		log.Printf("Warning: Failed to parse login template: %v", err)
+	}
+
+	changePasswordTemplate, err = template.ParseFiles("cmd/server/templates/change-password.html")
+	if err != nil {
+		log.Printf("Warning: Failed to parse change-password template: %v", err)
+	}
+
+	sessionTimeoutTemplate, err = template.ParseFiles("cmd/server/templates/session-timeout.html")
+	if err != nil {
+		log.Printf("Warning: Failed to parse session-timeout template: %v", err)
 	}
 }
 
@@ -84,9 +105,9 @@ func heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 		hb.VideoCard,
 		hb.Sound,
 		hb.SystemDrive,
-			hb.MACAddresses,
-			hb.Disks,
-			hb.Drives,
+		hb.MACAddresses,
+		hb.Disks,
+		hb.Drives,
 	)
 	if err != nil {
 		log.Printf("Database error: %v", err)
@@ -176,7 +197,7 @@ func agentDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create template data with JSON fields marked as safe (not HTML-escaped)
 	data := map[string]interface{}{
-		"Agent": agent,
+		"Agent":      agent,
 		"DisksJSON":  template.JS(agent.Disks),
 		"DrivesJSON": template.JS(agent.Drives),
 	}
@@ -198,8 +219,204 @@ func agentDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func requireAdminPage(w http.ResponseWriter, r *http.Request, cfg config.ServerConfig, allowMustChange bool) (*server.User, bool) {
+	_, user, err := authorizeAdminSession(w, r, cfg, true)
+	if err != nil {
+		next := sanitizeNextPath(r.URL.RequestURI())
+		target := "/session-timeout"
+		if next != "" {
+			target = target + "?next=" + url.QueryEscape(next)
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+		return nil, false
+	}
+	if user.MustChangePassword && !allowMustChange {
+		http.Redirect(w, r, "/admin/change-password", http.StatusFound)
+		return nil, false
+	}
+	return user, true
+}
+
+func renderLogin(w http.ResponseWriter, message, next string) {
+	if loginTemplate == nil {
+		http.Error(w, "Template not loaded", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"Error": message,
+		"Next":  next,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := loginTemplate.Execute(w, data); err != nil {
+		log.Printf("Error rendering login template: %v", err)
+		http.Error(w, "Template render error", http.StatusInternalServerError)
+	}
+}
+
+func renderChangePassword(w http.ResponseWriter, message, next string) {
+	if changePasswordTemplate == nil {
+		http.Error(w, "Template not loaded", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"Error": message,
+		"Next":  next,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := changePasswordTemplate.Execute(w, data); err != nil {
+		log.Printf("Error rendering change-password template: %v", err)
+		http.Error(w, "Template render error", http.StatusInternalServerError)
+	}
+}
+
+func renderSessionTimeout(w http.ResponseWriter, next string) {
+	if sessionTimeoutTemplate == nil {
+		http.Error(w, "Template not loaded", http.StatusInternalServerError)
+		return
+	}
+
+	data := map[string]interface{}{
+		"Next": next,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := sessionTimeoutTemplate.Execute(w, data); err != nil {
+		log.Printf("Error rendering session-timeout template: %v", err)
+		http.Error(w, "Template render error", http.StatusInternalServerError)
+	}
+}
+
+func sanitizeNextPath(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+	if !strings.HasPrefix(raw, "/") {
+		return ""
+	}
+	if strings.HasPrefix(raw, "//") {
+		return ""
+	}
+	return raw
+}
+
+func loginHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			renderLogin(w, "Invalid form data", "")
+			return
+		}
+
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+		next := sanitizeNextPath(r.FormValue("next"))
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		user, err := authenticateUser(ctx, username, password)
+		if err != nil {
+			renderLogin(w, "Invalid username or password", next)
+			return
+		}
+
+		if err := issueAdminSessionCookie(w, r, cfg, user.Username); err != nil {
+			log.Printf("Admin login token error: %v", err)
+			renderLogin(w, "Failed to create session", next)
+			return
+		}
+		_ = server.UpdateLastLogin(ctx, user.Username)
+
+		if user.MustChangePassword {
+			if next != "" {
+				http.Redirect(w, r, "/admin/change-password?next="+url.QueryEscape(next), http.StatusFound)
+				return
+			}
+			http.Redirect(w, r, "/admin/change-password", http.StatusFound)
+			return
+		}
+		if next != "" {
+			http.Redirect(w, r, next, http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, "/agents", http.StatusFound)
+	}
+}
+
+func changePasswordHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireAdminPage(w, r, cfg, true)
+		if !ok {
+			return
+		}
+
+		if r.Method == http.MethodGet {
+			next := sanitizeNextPath(r.URL.Query().Get("next"))
+			renderChangePassword(w, "", next)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			next := sanitizeNextPath(r.FormValue("next"))
+			renderChangePassword(w, "Invalid form data", next)
+			return
+		}
+
+		currentPassword := r.FormValue("current_password")
+		newPassword := r.FormValue("new_password")
+		confirmPassword := r.FormValue("confirm_password")
+		next := sanitizeNextPath(r.FormValue("next"))
+		if strings.TrimSpace(newPassword) == "" {
+			renderChangePassword(w, "New password is required", next)
+			return
+		}
+		if newPassword != confirmPassword {
+			renderChangePassword(w, "New password and confirmation do not match", next)
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+			renderChangePassword(w, "Current password is incorrect", next)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			renderChangePassword(w, "Failed to update password", next)
+			return
+		}
+		if err := server.UpdateUserPassword(ctx, user.Username, string(hash), false); err != nil {
+			log.Printf("UpdateUserPassword error: %v", err)
+			renderChangePassword(w, "Failed to update password", next)
+			return
+		}
+
+		if next != "" {
+			http.Redirect(w, r, next, http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, "/agents", http.StatusFound)
+	}
+}
+
 func main() {
 	cfg := config.LoadServerConfig()
+	logCloser, err := logging.Setup("server", cfg.LogDir, cfg.LogToConsole)
+	if err != nil {
+		log.Fatalf("Failed to setup logging: %v", err)
+	}
+	defer logCloser.Close()
 
 	// Initialize database
 	if err := server.InitDB(cfg.DatabaseURL); err != nil {
@@ -222,11 +439,32 @@ func main() {
 		}
 	}
 
+	defaultHash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("Failed to hash default admin password: %v", err)
+	}
+	created, err := server.EnsureDefaultAdmin(ctx, "admin", string(defaultHash))
+	if err != nil {
+		log.Fatalf("Failed to seed default admin: %v", err)
+	}
+	if created {
+		log.Println("Seeded default admin user (username: admin). Please change the password on first login.")
+	}
+
 	// Setup HTTP server with custom router
 	mux := http.NewServeMux()
 
 	// API endpoint for heartbeats
 	mux.HandleFunc("/api/heartbeat", heartbeatHandler)
+
+	// Commands endpoints (JWT protected)
+	mux.HandleFunc("/api/commands", commandsHandler(cfg))
+	mux.HandleFunc("/api/commands/next", commandPollHandler(cfg))
+	mux.HandleFunc("/api/commands/ack", commandAckHandler(cfg))
+
+	// Admin session endpoints
+	mux.HandleFunc("/admin/login", adminLoginHandler(cfg))
+	mux.HandleFunc("/admin/logout", adminLogoutHandler())
 
 	// Health check endpoint
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -235,10 +473,18 @@ func main() {
 	})
 
 	// Agents list handler
-	mux.HandleFunc("/agents", agentsHandler)
+	mux.HandleFunc("/agents", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAdminPage(w, r, cfg, false); !ok {
+			return
+		}
+		agentsHandler(w, r)
+	})
 
 	// Agent detail handler (must have trailing slash to match /agents/...)
 	mux.HandleFunc("/agents/", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAdminPage(w, r, cfg, false); !ok {
+			return
+		}
 		log.Printf("Route /agents/ handler called for path: %s", r.URL.Path)
 		agentID := strings.TrimPrefix(r.URL.Path, "/agents/")
 		log.Printf("Extracted agent ID: %s", agentID)
@@ -250,13 +496,32 @@ func main() {
 		}
 	})
 
-	// Root handler - redirect to agents
+	// Login routes
+	mux.HandleFunc("/login", loginHandler(cfg))
+	mux.HandleFunc("/admin/change-password", changePasswordHandler(cfg))
+	mux.HandleFunc("/session-timeout", func(w http.ResponseWriter, r *http.Request) {
+		next := sanitizeNextPath(r.URL.Query().Get("next"))
+		renderSessionTimeout(w, next)
+	})
+
+	// Root handler - login or redirect
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/agents", http.StatusMovedPermanently)
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+
+		_, user, err := authorizeAdminSession(w, r, cfg, true)
+		if err == nil {
+			if user.MustChangePassword {
+				http.Redirect(w, r, "/admin/change-password", http.StatusFound)
+				return
+			}
+			http.Redirect(w, r, "/agents", http.StatusFound)
+			return
+		}
+
+		renderLogin(w, "", "")
 	})
 
 	httpServer := &http.Server{

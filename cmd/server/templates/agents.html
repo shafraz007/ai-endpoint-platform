@@ -183,13 +183,37 @@
         .refresh-btn:hover {
             background: #764ba2;
         }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .ghost-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🚀 AI Endpoint Platform</h1>
-            <p class="header-info">Agent Management Dashboard</p>
+            <div class="header-top">
+                <div>
+                    <h1>🚀 AI Endpoint Platform</h1>
+                    <p class="header-info">Agent Management Dashboard</p>
+                </div>
+                <button class="ghost-btn" id="logout-button" type="button">Logout</button>
+            </div>
             <div class="stats">
                 <div class="stat-card">
                     <div class="stat-number">{{.TotalAgents}}</div>
@@ -253,5 +277,14 @@
             <p>AI Endpoint Platform • Last updated: {{.LastUpdated}}</p>
         </div>
     </div>
+    <script>
+        const logoutButton = document.getElementById('logout-button');
+        if (logoutButton) {
+            logoutButton.addEventListener('click', async () => {
+                await fetch('/admin/logout', { method: 'POST' });
+                window.location.href = '/';
+            });
+        }
+    </script>
 </body>
 </html>

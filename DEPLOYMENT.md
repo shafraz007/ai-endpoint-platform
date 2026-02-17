@@ -44,6 +44,7 @@ This guide covers deploying the AI Endpoint Platform v1.0.0 to production enviro
 - [ ] Configuration options documented
 - [ ] API endpoints tested
 - [ ] Runbooks created
+- [ ] Admin login and password rotation documented
 
 ## Pre-Deployment Steps
 
@@ -143,7 +144,21 @@ SERVER_PORT=8080
 # Agent Monitoring (seconds)
 OFFLINE_TIMEOUT_SECONDS=90
 OFFLINE_CHECK_INTERVAL_SECONDS=30
+
+# JWT Secrets (required for command API)
+AGENT_JWT_SECRET=<shared_agent_secret>
+ADMIN_JWT_SECRET=<admin_secret>
+ADMIN_JWT_TTL_SECONDS=3600
+
+# Logging
+LOG_DIR=/var/log/ai-endpoint-platform
+LOG_TO_CONSOLE=false
 ```
+
+Default admin user
+- First run seeds a default admin: username `admin`, password `admin`.
+- Admins must change the password on first login.
+- Login page: `/` and session timeout page: `/session-timeout`.
 
 Permissions:
 ```bash
@@ -283,6 +298,8 @@ Copy-Item -Path "bin\agent.exe" -Destination $appPath
 [Environment]::SetEnvironmentVariable("SERVER_PORT", "8080", "Machine")
 [Environment]::SetEnvironmentVariable("OFFLINE_TIMEOUT_SECONDS", "90", "Machine")
 [Environment]::SetEnvironmentVariable("OFFLINE_CHECK_INTERVAL_SECONDS", "30", "Machine")
+[Environment]::SetEnvironmentVariable("AGENT_JWT_SECRET", "<shared_agent_secret>", "Machine")
+[Environment]::SetEnvironmentVariable("ADMIN_JWT_SECRET", "<admin_secret>", "Machine")
 ```
 
 #### 4. Create Windows Service
@@ -293,7 +310,7 @@ nssm install AIEndpointServer `
   "C:\Program Files\AIEndpointPlatform\server.exe"
 
 nssm set AIEndpointServer AppEnvironmentExtra `
-  "DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require;SERVER_PORT=8080;OFFLINE_TIMEOUT_SECONDS=90;OFFLINE_CHECK_INTERVAL_SECONDS=30"
+  "DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require;SERVER_PORT=8080;OFFLINE_TIMEOUT_SECONDS=90;OFFLINE_CHECK_INTERVAL_SECONDS=30;AGENT_JWT_SECRET=<shared_agent_secret>;ADMIN_JWT_SECRET=<admin_secret>"
 
 # Configure Log
 nssm set AIEndpointServer AppStdout `
@@ -379,6 +396,8 @@ services:
     environment:
       DATABASE_URL: postgres://ai_endpoint_user:${DB_PASSWORD}@db:5432/ai_agents?sslmode=disable
       SERVER_PORT: 8080
+      AGENT_JWT_SECRET: ${AGENT_JWT_SECRET}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
     ports:
       - "8080:8080"
     depends_on:
@@ -450,6 +469,7 @@ curl -X GET http://localhost:8080/agents
 ```bash
 # On agent machine
 export SERVER_URL=https://ai-endpoint.example.com
+export AGENT_JWT_SECRET=<shared_agent_secret>
 ./agent
 
 # Watch server logs for heartbeat

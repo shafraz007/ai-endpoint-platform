@@ -8,21 +8,21 @@ import (
 
 // Agent represents a monitored agent device
 type Agent struct {
-	ID               int
-	AgentID          string
-	Hostname         string
-	Domain           string
-	PublicIP         string
-	PrivateIP        string
-	LastLogin        *time.Time
-	LastSeen         time.Time
-	LastReboot       *time.Time
-	Timezone         string
-	AgentVersion     string
-	Status           string
-	DateAdded        time.Time
-	UpdatedAt        time.Time
-	CreatedAt        time.Time
+	ID           int
+	AgentID      string
+	Hostname     string
+	Domain       string
+	PublicIP     string
+	PrivateIP    string
+	LastLogin    *time.Time
+	LastSeen     time.Time
+	LastReboot   *time.Time
+	Timezone     string
+	AgentVersion string
+	Status       string
+	DateAdded    time.Time
+	UpdatedAt    time.Time
+	CreatedAt    time.Time
 	// Hardware Information
 	HardwareVendor       string
 	HardwareModel        string
@@ -38,8 +38,8 @@ type Agent struct {
 	SystemDrive          string
 	MACAddresses         string
 	// Disk and drive JSON blobs
-	Disks               string
-	Drives              string
+	Disks  string
+	Drives string
 }
 
 // GetAllAgents retrieves all agents from the database
