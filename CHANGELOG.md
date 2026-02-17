@@ -5,6 +5,21 @@ All notable changes to the AI Endpoint Platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-02-17
+
+### Added
+
+- Metrics ingestion and history APIs (`POST /api/metrics`, `GET /api/metrics`, `GET /api/metrics/stream`)
+- Agent metrics collector for CPU, memory, and network throughput sampling
+- Metrics dashboard tab with chart-based visualizations
+- Explicit remote command types: `cmd` and `powershell`
+
+### Changed
+
+- Metrics history now supports duration filters: `10m`, `1h`, `4h`, `12h`, `24h`
+- Network throughput chart unit updated from `KB/s` to `MB/s`
+- Windows shell execution behavior is deterministic (`shell` uses `cmd /C`; `powershell` uses PowerShell explicitly)
+
 ## [1.0.1] - 2026-02-17
 
 ### Added
