@@ -77,11 +77,7 @@ createdb ai_agents
 
 2. Set environment variables:
 ```bash
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_USER=postgres
-export DB_PASSWORD=your_password
-export DB_NAME=ai_agents
+export DATABASE_URL=postgres://ai_endpoint_user:your_password@localhost:5432/ai_agents?sslmode=disable
 export SERVER_PORT=8080
 ```
 
@@ -101,29 +97,25 @@ go run ./cmd/agent
 ### Agent Environment Variables
 ```bash
 SERVER_URL=http://localhost:8080
-HEARTBEAT_INTERVAL=30s
-REQUEST_TIMEOUT=10s
-AGENT_CONFIG_DIR=~/.config/ai-endpoint-agent
+HEARTBEAT_INTERVAL_SECONDS=30
+REQUEST_TIMEOUT_SECONDS=10
+MAX_RETRIES=3
+RETRY_BACKOFF_SECONDS=2
 ```
 
 ### Server Environment Variables
 ```bash
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=
-DB_NAME=ai_agents
-DB_SSL_MODE=disable
+DATABASE_URL=postgres://ai_endpoint_user:your_password@localhost:5432/ai_agents?sslmode=disable
 SERVER_PORT=8080
-AGENT_HEARTBEAT_TIMEOUT=30
-AGENT_CHECKER_INTERVAL=5
+OFFLINE_TIMEOUT_SECONDS=90
+OFFLINE_CHECK_INTERVAL_SECONDS=30
 ```
 
 ## Offline Detection
 
 Agents are marked offline when:
-1. No heartbeat received for 30 seconds (configurable)
-2. Detected by periodic background checker (runs every 5 seconds)
+1. No heartbeat received for 90 seconds (configurable)
+2. Detected by periodic background checker (runs every 30 seconds)
 
 Agent status updated to "offline" in database and reflected in UI.
 

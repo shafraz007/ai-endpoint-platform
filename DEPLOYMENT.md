@@ -63,7 +63,7 @@ GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent.exe ./cmd/agent
 
 ```bash
 # Test in staging environment
-export DB_HOST=staging-db.internal
+export DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@staging-db.internal:5432/ai_agents?sslmode=disable
 export SERVER_PORT=8080
 ./bin/server
 
@@ -135,24 +135,14 @@ Create `/etc/ai-endpoint-platform/server.env`:
 
 ```bash
 # Database Configuration
-DB_HOST=prod-db.internal
-DB_PORT=5432
-DB_USER=ai_endpoint_user
-DB_PASSWORD=<your_secure_password>
-DB_NAME=ai_agents
-DB_SSL_MODE=require
+DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require
 
 # Server Configuration
 SERVER_PORT=8080
-SERVER_LISTEN_ADDR=:8080
 
-# Agent Monitoring
-AGENT_HEARTBEAT_TIMEOUT=30
-AGENT_CHECKER_INTERVAL=5
-
-# Logging
-LOG_LEVEL=info
-LOG_FILE=/var/log/ai-endpoint-platform/server.log
+# Agent Monitoring (seconds)
+OFFLINE_TIMEOUT_SECONDS=90
+OFFLINE_CHECK_INTERVAL_SECONDS=30
 ```
 
 Permissions:
@@ -168,7 +158,6 @@ Create `/etc/systemd/system/ai-endpoint-server.service`:
 ```ini
 [Unit]
 Description=AI Endpoint Platform Server
-Documentation=file:///opt/ai-endpoint-platform/docs/README.md
 After=network.target postgresql.service
 Wants=postgresql.service
 
@@ -258,7 +247,7 @@ server {
     }
     
     # Health Check Endpoint
-    location /health {
+    location /healthz {
         proxy_pass http://ai_endpoint;
         access_log off;
     }
@@ -287,26 +276,13 @@ Copy-Item -Path "bin\server.exe" -Destination $appPath
 Copy-Item -Path "bin\agent.exe" -Destination $appPath
 ```
 
-#### 3. Create Configuration File
+#### 3. Set Environment Variables
 
-Create `C:\Program Files\AIEndpointPlatform\server.config`:
-
-```ini
-[Database]
-Host=prod-db.internal
-Port=5432
-User=ai_endpoint_user
-Password=<your_secure_password>
-Name=ai_agents
-SSLMode=require
-
-[Server]
-Port=8080
-ListenAddr=:8080
-
-[Monitoring]
-HeartbeatTimeout=30
-CheckerInterval=5
+```powershell
+[Environment]::SetEnvironmentVariable("DATABASE_URL", "postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require", "Machine")
+[Environment]::SetEnvironmentVariable("SERVER_PORT", "8080", "Machine")
+[Environment]::SetEnvironmentVariable("OFFLINE_TIMEOUT_SECONDS", "90", "Machine")
+[Environment]::SetEnvironmentVariable("OFFLINE_CHECK_INTERVAL_SECONDS", "30", "Machine")
 ```
 
 #### 4. Create Windows Service
@@ -314,9 +290,10 @@ CheckerInterval=5
 ```powershell
 # Using NSSM (Non-Sucking Service Manager)
 nssm install AIEndpointServer `
-  "C:\Program Files\AIEndpointPlatform\server.exe" `
-  "-config" `
-  "C:\Program Files\AIEndpointPlatform\server.config"
+  "C:\Program Files\AIEndpointPlatform\server.exe"
+
+nssm set AIEndpointServer AppEnvironmentExtra `
+  "DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require;SERVER_PORT=8080;OFFLINE_TIMEOUT_SECONDS=90;OFFLINE_CHECK_INTERVAL_SECONDS=30"
 
 # Configure Log
 nssm set AIEndpointServer AppStdout `
@@ -400,12 +377,7 @@ services:
   server:
     build: .
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: ai_endpoint_user
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ai_agents
-      DB_SSL_MODE: disable
+      DATABASE_URL: postgres://ai_endpoint_user:${DB_PASSWORD}@db:5432/ai_agents?sslmode=disable
       SERVER_PORT: 8080
     ports:
       - "8080:8080"
@@ -460,6 +432,9 @@ psql -h prod-db.internal -U postgres -d ai_agents \
 ### 3. Test Health Endpoints
 
 ```bash
+# Test health endpoint
+curl -X GET http://localhost:8080/healthz
+
 # Test API
 curl -X GET http://localhost:8080/api/agents
 
@@ -568,22 +543,9 @@ sudo systemctl start ai-endpoint-server
    - Replication lag (if applicable)
    - Disk usage
 
-### Health Check Endpoint
+### Health Check Endpoint (/healthz)
 
-Add `/health` endpoint to server (optional enhancement):
-
-```go
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-    if db.Ping(r.Context()) != nil {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        w.Write([]byte("Database unavailable"))
-        return
-    }
-    
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte("OK"))
-}
-```
+The server exposes `/healthz` and returns `{"status":"healthy"}`. It does not check database connectivity by default.
 
 ### Example: Prometheus Monitoring
 
