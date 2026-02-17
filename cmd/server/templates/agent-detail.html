@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Details - {{.Agent.Hostname}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .back-button {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: 2px solid white;
+        }
+
+        .back-button:hover {
+            background: transparent;
+            color: white;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2em;
+            margin: 0;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .detail-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .detail-card h3 {
+            color: #333;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            opacity: 0.7;
+        }
+
+        .detail-card .value {
+            color: #333;
+            font-size: 16px;
+            font-weight: 500;
+            word-break: break-all;
+        }
+
+        .detail-card .value.code {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        /* Tabs styling */
+        .tabs {
+            background: white;
+            border-radius: 10px 10px 0 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            border-bottom: 2px solid #f0f0f0;
+            margin-bottom: 0;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 20px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            color: #666;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.3s;
+        }
+
+        .tab-button:hover {
+            color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .info-section {
+            background: white;
+            padding: 30px;
+            border-radius: 0 10px 10px 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .info-section:first-of-type {
+            border-radius: 0 10px 10px 10px;
+            margin-bottom: 20px;
+        }
+
+        .info-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .info-row {
+            display: flex;
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            flex: 0 0 200px;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            flex: 1;
+            color: #333;
+            font-size: 15px;
+        }
+
+        .info-value.code {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+
+        .timestamp {
+            color: #999;
+            font-size: 13px;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/agents" class="back-button">← Back to Agents</a>
+
+        <header>
+            <div class="header-top">
+                <h1>{{.Agent.Hostname}}</h1>
+                <span class="status-badge status-{{.Agent.Status}}">{{.Agent.Status}}</span>
+            </div>
+
+            <div class="details-grid">
+                <div class="detail-card">
+                    <h3>Agent ID</h3>
+                    <div class="value code">{{.Agent.AgentID}}</div>
+                </div>
+                <div class="detail-card">
+                    <h3>Agent Version</h3>
+                    <div class="value">{{if .Agent.AgentVersion}}{{.Agent.AgentVersion}}{{else}}<span class="empty">-</span>{{end}}</div>
+                </div>
+                <div class="detail-card">
+                    <h3>Last Seen</h3>
+                    <div class="value"><span class="timestamp">{{.Agent.LastSeen.Format "2006-01-02 15:04:05"}}</span></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('overview', this)">📋 Overview</button>
+            <button class="tab-button" onclick="switchTab('hardware', this)">🖥️ Hardware</button>
+            <button class="tab-button" onclick="switchTab('disks', this)">💽 Disks</button>
+        </div>
+
+        <!-- Overview Tab Content -->
+        <div id="overview" class="tab-content active">
+            <div class="info-section">
+                <h2>Network Information</h2>
+                
+                <div class="info-row">
+                    <div class="info-label">Domain</div>
+                    <div class="info-value">{{if .Agent.Domain}}{{.Agent.Domain}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Private IP</div>
+                    <div class="info-value">{{if .Agent.PrivateIP}}{{.Agent.PrivateIP}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Public IP</div>
+                    <div class="info-value">{{if .Agent.PublicIP}}{{.Agent.PublicIP}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h2>System Information</h2>
+
+                <div class="info-row">
+                    <div class="info-label">Timezone</div>
+                    <div class="info-value">{{if .Agent.Timezone}}{{.Agent.Timezone}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Last Reboot</div>
+                    <div class="info-value">
+                        {{if .Agent.LastReboot}}<span class="timestamp">{{.Agent.LastReboot.Format "2006-01-02 15:04:05"}}</span>{{else}}<span class="empty">Not available</span>{{end}}
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Last Login</div>
+                    <div class="info-value">
+                        {{if .Agent.LastLogin}}<span class="timestamp">{{.Agent.LastLogin.Format "2006-01-02 15:04:05"}}</span>{{else}}<span class="empty">Not available</span>{{end}}
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h2>Timeline</h2>
+
+                <div class="info-row">
+                    <div class="info-label">Date Added</div>
+                    <div class="info-value"><span class="timestamp">{{.Agent.DateAdded.Format "2006-01-02 15:04:05"}}</span></div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Last Updated</div>
+                    <div class="info-value"><span class="timestamp">{{.Agent.UpdatedAt.Format "2006-01-02 15:04:05"}}</span></div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Created At</div>
+                    <div class="info-value"><span class="timestamp">{{.Agent.CreatedAt.Format "2006-01-02 15:04:05"}}</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disks Tab Content -->
+        <div id="disks" class="tab-content">
+            <div class="info-section">
+                <h2>Storage Devices</h2>
+                <p style="color:#666;margin-bottom:16px">Physical disks are hardware devices, while logical drives represent mounted volumes/partitions.</p>
+
+                <div id="disks-container">
+                    <p class="empty">No disk information available.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hardware Tab Content -->
+        <div id="hardware" class="tab-content">
+            <div class="info-section">
+                <h2>Hardware Information</h2>
+
+                <div class="info-row">
+                    <div class="info-label">Vendor</div>
+                    <div class="info-value">{{if .Agent.HardwareVendor}}{{.Agent.HardwareVendor}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Model</div>
+                    <div class="info-value">{{if .Agent.HardwareModel}}{{.Agent.HardwareModel}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Serial Number</div>
+                    <div class="info-value">{{if .Agent.HardwareSerialNumber}}{{.Agent.HardwareSerialNumber}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Motherboard</div>
+                    <div class="info-value">{{if .Agent.Motherboard}}{{.Agent.Motherboard}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">BIOS Manufacturer</div>
+                    <div class="info-value">{{if .Agent.BIOSManufacturer}}{{.Agent.BIOSManufacturer}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">BIOS Version</div>
+                    <div class="info-value">{{if .Agent.BIOSVersion}}{{.Agent.BIOSVersion}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">BIOS Version Date</div>
+                    <div class="info-value">{{if .Agent.BIOSVersionDate}}{{.Agent.BIOSVersionDate}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Processor</div>
+                    <div class="info-value">{{if .Agent.Processor}}{{.Agent.Processor}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Memory</div>
+                    <div class="info-value">{{if .Agent.Memory}}{{.Agent.Memory}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Video Card</div>
+                    <div class="info-value">{{if .Agent.VideoCard}}{{.Agent.VideoCard}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Sound</div>
+                    <div class="info-value">{{if .Agent.Sound}}{{.Agent.Sound}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">System Drive</div>
+                    <div class="info-value">{{if .Agent.SystemDrive}}{{.Agent.SystemDrive}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">MAC Addresses</div>
+                    <div class="info-value">{{if .Agent.MACAddresses}}{{.Agent.MACAddresses}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>AI Endpoint Platform • Agent Details</p>
+        </div>
+    </div>
+
+        <script>
+        // Parse disk and drive JSON from template data (safe HTML/JS variables)
+        let disksData = {{.DisksJSON}};
+        let drivesData = {{.DrivesJSON}};
+        
+        function switchTab(tabName, btn) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('.tab-button');
+            buttons.forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // Show selected tab content
+            const selectedContent = document.getElementById(tabName);
+            if (selectedContent) {
+                selectedContent.classList.add('active');
+            }
+
+            // Add active class to clicked button
+            if (btn) btn.classList.add('active');
+        }
+        // Render disks and drives after DOM loaded
+        window.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('disks-container');
+
+            if (!container) return;
+
+            let disks = [];
+            let drives = [];
+            
+            if (typeof disksData !== 'undefined' && typeof disksData === 'object') {
+                disks = disksData;
+            }
+            if (typeof drivesData !== 'undefined' && typeof drivesData === 'object') {
+                drives = drivesData;
+            }
+            
+            console.log('Physical Disks:', disks);
+            console.log('Logical Drives:', drives);
+
+            if ((!disks || disks.length === 0) && (!drives || drives.length === 0)) {
+                container.innerHTML = '<p class="empty">No disk or drive information available.</p>';
+                return;
+            }
+
+            let html = '';
+
+            // Render Physical Disks
+            if (disks && disks.length > 0) {
+                html += '<h3>Physical Disks</h3>';
+                html += '<table style="width:100%;border-collapse:collapse">';
+                html += '<thead><tr><th style="text-align:left;padding:8px;border-bottom:2px solid #ddd">Index</th><th style="text-align:left;padding:8px;border-bottom:2px solid #ddd">Model</th><th style="text-align:left;padding:8px;border-bottom:2px solid #ddd">Size</th><th style="text-align:left;padding:8px;border-bottom:2px solid #ddd">Interface</th><th style="text-align:left;padding:8px;border-bottom:2px solid #ddd">Status</th><th style="text-align:left;padding:8px;border-bottom:2px solid #ddd">Partitions</th></tr></thead><tbody>';
+                disks.forEach((d) => {
+                    const sizeGB = d.Size ? (d.Size / (1024 * 1024 * 1024)).toFixed(2) : '0';
+                    html += '<tr>';
+                    html += `<td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.Index ?? ''}</td>`;
+                    html += `<td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.Model || 'Unknown'}</td>`;
+                    html += `<td style="padding:8px;border-bottom:1px solid #f0f0f0">${sizeGB} GB</td>`;
+                    html += `<td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.InterfaceType || 'Unknown'}</td>`;
+                    html += `<td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.Status || 'Unknown'}</td>`;
+                    html += `<td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.Partitions ?? '0'}</td>`;
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+            }
+
+            // Render Logical Drives
+            if (drives && drives.length > 0) {
+                html += '<h3 style="margin-top:20px">Logical Drives</h3>';
+                drives.forEach(d => {
+                    const totalGB = d.Size ? (d.Size / (1024 * 1024 * 1024)).toFixed(2) : '0';
+                    const usedGB = d.Used ? (d.Used / (1024 * 1024 * 1024)).toFixed(2) : '0';
+                    const freeGB = d.Free ? (d.Free / (1024 * 1024 * 1024)).toFixed(2) : '0';
+                    const percent = d.PercentUsed || 0;
+                    
+                    html += '<div style="margin-bottom:12px;padding:12px;background:#fafafa;border-radius:6px;border:1px solid #f0f0f0">';
+                    html += `<div style="font-weight:600;margin-bottom:8px">${d.DeviceID || 'Unknown'}</div>`;
+                    html += `<div style="margin-bottom:4px">Total: ${totalGB} GB | Used: ${usedGB} GB | Free: ${freeGB} GB</div>`;
+                    html += `<div style="margin-bottom:8px">Usage: ${percent}%</div>`;
+                    html += `<div style="background:#e0e0e0;border-radius:4px;height:12px;overflow:hidden"><div style="background:#4CAF50;height:100%;width:${percent}%"></div></div>`;
+                    html += '</div>';
+                });
+            }
+
+            container.innerHTML = html;
+        });
+    </script>
+</body>
+</html>
