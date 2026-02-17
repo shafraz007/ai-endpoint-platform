@@ -108,6 +108,16 @@ func heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 		hb.MACAddresses,
 		hb.Disks,
 		hb.Drives,
+		hb.OSEdition,
+		hb.OSVersion,
+		hb.OSBuild,
+		hb.Windows11Eligible,
+		hb.DotNetVersion,
+		hb.OfficeVersion,
+		hb.AntivirusName,
+		hb.AntiSpywareName,
+		hb.FirewallName,
+		hb.TLS12Compatible,
 	)
 	if err != nil {
 		log.Printf("Database error: %v", err)

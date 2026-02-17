@@ -38,6 +38,9 @@ func main() {
 		log.Fatalf("Failed to get system info: %v", err)
 	}
 
+	// Collect OS and security information
+	osInfo := agent.CollectOSInfo()
+
 	log.Printf("Agent started - ID: %s, Hostname: %s, Version: %s", sysInfo.AgentID, sysInfo.Hostname, sysInfo.AgentVersion)
 	log.Printf("Server URL: %s, Heartbeat interval: %v", cfg.ServerURL, cfg.HeartbeatInterval)
 
@@ -110,6 +113,16 @@ func main() {
 				MACAddresses:         sysInfo.MACAddresses,
 				Disks:                sysInfo.DisksJSON,
 				Drives:               sysInfo.DrivesJSON,
+				OSEdition:            osInfo.OSEdition,
+				OSVersion:            osInfo.OSVersion,
+				OSBuild:              osInfo.OSBuild,
+				Windows11Eligible:    osInfo.Windows11Eligible,
+				TLS12Compatible:      osInfo.TLS12Compatible,
+				DotNetVersion:        osInfo.DotNetVersion,
+				OfficeVersion:        osInfo.OfficeVersion,
+				AntivirusName:        osInfo.AntivirusName,
+				AntiSpywareName:      osInfo.AntiSpywareName,
+				FirewallName:         osInfo.FirewallName,
 			}
 			sendHeartbeatWithRetry(httpClient, cfg, hb)
 		case <-metricsTicker.C:

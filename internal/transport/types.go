@@ -33,6 +33,17 @@ type HeartbeatRequest struct {
 	// Disk and drive information serialized as JSON
 	Disks  string `json:"disks,omitempty"`
 	Drives string `json:"drives,omitempty"`
+	// OS Information
+	OSEdition           string `json:"os_edition,omitempty"`
+	OSVersion           string `json:"os_version,omitempty"`
+	OSBuild             string `json:"os_build,omitempty"`
+	Windows11Eligible   string `json:"windows_11_eligible,omitempty"`
+	TLS12Compatible     bool   `json:"tls_12_compatible,omitempty"`
+	DotNetVersion       string `json:"dotnet_version,omitempty"`
+	OfficeVersion       string `json:"office_version,omitempty"`
+	AntivirusName       string `json:"antivirus_name,omitempty"`
+	AntiSpywareName     string `json:"antispyware_name,omitempty"`
+	FirewallName        string `json:"firewall_name,omitempty"`
 }
 
 // Command represents a pending command for an agent.
