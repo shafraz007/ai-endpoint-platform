@@ -40,6 +40,7 @@ func main() {
 
 	// Collect OS and security information
 	osInfo := agent.CollectOSInfo()
+	log.Printf("OS Info collected - Edition: %s, Build: %s", osInfo.OSEdition, osInfo.OSBuild)
 
 	log.Printf("Agent started - ID: %s, Hostname: %s, Version: %s", sysInfo.AgentID, sysInfo.Hostname, sysInfo.AgentVersion)
 	log.Printf("Server URL: %s, Heartbeat interval: %v", cfg.ServerURL, cfg.HeartbeatInterval)
