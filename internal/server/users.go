@@ -99,20 +99,18 @@ func AnyAdminExists(ctx context.Context) (bool, error) {
 }
 
 func EnsureDefaultAdmin(ctx context.Context, username, passwordHash string) (bool, error) {
-	exists, err := AnyAdminExists(ctx)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return false, nil
-	}
-
 	username = strings.TrimSpace(username)
 	if username == "" {
 		username = "admin"
 	}
-	if err := CreateUser(ctx, username, passwordHash, "admin", true); err != nil {
+	query := `
+	INSERT INTO users (username, password_hash, role, must_change_password)
+	VALUES ($1, $2, $3, $4)
+	ON CONFLICT (username) DO NOTHING
+	`
+	cmd, err := DB.Exec(ctx, query, username, passwordHash, "admin", true)
+	if err != nil {
 		return false, err
 	}
-	return true, nil
+	return cmd.RowsAffected() > 0, nil
 }
