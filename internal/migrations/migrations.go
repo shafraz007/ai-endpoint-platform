@@ -26,6 +26,10 @@ var migrations = []Migration{
 		Name: "003_create_users_table_v1_2_0",
 		Up:   createUsersTableV1,
 	},
+	{
+		Name: "004_create_agent_metrics_table_v1_3_0",
+		Up:   createAgentMetricsTableV1,
+	},
 }
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -194,6 +198,31 @@ func createUsersTableV1(ctx context.Context, db *pgxpool.Pool) error {
 
 	CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 	CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createAgentMetricsTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS agent_metrics (
+		id BIGSERIAL PRIMARY KEY,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		timestamp TIMESTAMP NOT NULL,
+		cpu_percent DOUBLE PRECISION NOT NULL,
+		memory_used_percent DOUBLE PRECISION NOT NULL,
+		memory_used_bytes BIGINT NOT NULL,
+		memory_total_bytes BIGINT NOT NULL,
+		net_bytes_sent_per_sec DOUBLE PRECISION NOT NULL,
+		net_bytes_recv_per_sec DOUBLE PRECISION NOT NULL,
+		net_packets_sent_per_sec DOUBLE PRECISION NOT NULL,
+		net_packets_recv_per_sec DOUBLE PRECISION NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_metrics_agent_id ON agent_metrics(agent_id);
+	CREATE INDEX IF NOT EXISTS idx_agent_metrics_timestamp ON agent_metrics(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_agent_metrics_agent_time ON agent_metrics(agent_id, timestamp);
 	`
 
 	_, err := db.Exec(ctx, query)

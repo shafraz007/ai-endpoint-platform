@@ -59,14 +59,14 @@ func handleCommandCreate(w http.ResponseWriter, r *http.Request, cfg config.Serv
 	}
 
 	switch req.CommandType {
-	case "ping", "echo", "shell", "restart", "shutdown":
+	case "ping", "echo", "shell", "cmd", "powershell", "restart", "shutdown":
 		// ok
 	default:
 		http.Error(w, "Unsupported command_type", http.StatusBadRequest)
 		return
 	}
 
-	if (req.CommandType == "echo" || req.CommandType == "shell") && strings.TrimSpace(req.Payload) == "" {
+	if (req.CommandType == "echo" || req.CommandType == "shell" || req.CommandType == "cmd" || req.CommandType == "powershell") && strings.TrimSpace(req.Payload) == "" {
 		http.Error(w, "Missing payload", http.StatusBadRequest)
 		return
 	}

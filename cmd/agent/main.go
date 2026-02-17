@@ -46,6 +46,8 @@ func main() {
 		Timeout: cfg.RequestTimeout,
 	}
 
+	metricsCollector := agent.NewMetricsCollector()
+
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -55,6 +57,9 @@ func main() {
 
 	heartbeatTicker := time.NewTicker(cfg.HeartbeatInterval)
 	defer heartbeatTicker.Stop()
+
+	metricsTicker := time.NewTicker(cfg.MetricsInterval)
+	defer metricsTicker.Stop()
 
 	var commandTick <-chan time.Time
 	if cfg.JWTSecret != "" {
@@ -107,6 +112,8 @@ func main() {
 				Drives:               sysInfo.DrivesJSON,
 			}
 			sendHeartbeatWithRetry(httpClient, cfg, hb)
+		case <-metricsTicker.C:
+			sendMetrics(httpClient, cfg, sysInfo.AgentID, metricsCollector)
 		case <-commandTick:
 			pollAndExecuteCommand(httpClient, cfg, sysInfo.AgentID)
 		}
@@ -161,6 +168,63 @@ func sendHeartbeat(httpClient *http.Client, serverURL string, hb transport.Heart
 
 	log.Printf("Heartbeat sent successfully")
 	return nil
+}
+
+func sendMetrics(httpClient *http.Client, cfg config.AgentConfig, agentID string, collector *agent.MetricsCollector) {
+	if cfg.JWTSecret == "" {
+		return
+	}
+
+	snapshot, err := collector.Sample()
+	if err != nil {
+		log.Printf("Metrics sample failed: %v", err)
+		return
+	}
+
+	token, err := auth.GenerateToken(agentID, "agent", cfg.JWTSecret, cfg.JWTTTL)
+	if err != nil {
+		log.Printf("Failed to generate agent token: %v", err)
+		return
+	}
+
+	metrics := transport.MetricsSample{
+		AgentID:              agentID,
+		Timestamp:            time.Now(),
+		CPUPercent:           snapshot.CPUPercent,
+		MemoryUsedPercent:    snapshot.MemoryUsedPercent,
+		MemoryUsedBytes:      snapshot.MemoryUsedBytes,
+		MemoryTotalBytes:     snapshot.MemoryTotalBytes,
+		NetBytesSentPerSec:   snapshot.NetBytesSentPerSec,
+		NetBytesRecvPerSec:   snapshot.NetBytesRecvPerSec,
+		NetPacketsSentPerSec: snapshot.NetPacketsSentPerSec,
+		NetPacketsRecvPerSec: snapshot.NetPacketsRecvPerSec,
+	}
+
+	jsonData, err := json.Marshal(metrics)
+	if err != nil {
+		log.Printf("Failed to serialize metrics: %v", err)
+		return
+	}
+
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/metrics"
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("Failed to create metrics request: %v", err)
+		return
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := httpClient.Do(request)
+	if err != nil {
+		log.Printf("Metrics send failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		log.Printf("Metrics send HTTP %s", resp.Status)
+	}
 }
 
 func pollAndExecuteCommand(httpClient *http.Client, cfg config.AgentConfig, agentID string) {
@@ -228,6 +292,18 @@ func executeCommand(cmd transport.Command, cfg config.AgentConfig) (string, stri
 			return "failed", output, err.Error()
 		}
 		return "succeeded", output, ""
+	case "cmd":
+		output, err := runCmdCommand(cmd.Payload, cfg.CommandTimeout)
+		if err != nil {
+			return "failed", output, err.Error()
+		}
+		return "succeeded", output, ""
+	case "powershell":
+		output, err := runPowerShellCommand(cmd.Payload, cfg.CommandTimeout)
+		if err != nil {
+			return "failed", output, err.Error()
+		}
+		return "succeeded", output, ""
 	case "restart":
 		if err := restartSystem(); err != nil {
 			return "failed", "", fmt.Sprintf("restart failed: %v", err)
@@ -244,21 +320,34 @@ func executeCommand(cmd transport.Command, cfg config.AgentConfig) (string, stri
 }
 
 func runShellCommand(command string, timeout time.Duration) (string, error) {
+	if runtime.GOOS == "windows" {
+		return executeThroughShell(timeout, "cmd", "/C", command)
+	}
+
+	return executeThroughShell(timeout, "sh", "-c", command)
+}
+
+func runCmdCommand(command string, timeout time.Duration) (string, error) {
+	if runtime.GOOS != "windows" {
+		return "", fmt.Errorf("cmd command_type is only supported on Windows")
+	}
+
+	return executeThroughShell(timeout, "cmd", "/C", command)
+}
+
+func runPowerShellCommand(command string, timeout time.Duration) (string, error) {
+	if runtime.GOOS == "windows" {
+		return executeThroughShell(timeout, "powershell", "-NoProfile", "-Command", command)
+	}
+
+	return executeThroughShell(timeout, "pwsh", "-NoProfile", "-Command", command)
+}
+
+func executeThroughShell(timeout time.Duration, executable string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	var execCmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		// Detect if this is a PowerShell command
-		if isPowerShellCommand(command) {
-			execCmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", command)
-		} else {
-			execCmd = exec.CommandContext(ctx, "cmd", "/C", command)
-		}
-	} else {
-		execCmd = exec.CommandContext(ctx, "sh", "-c", command)
-	}
-
+	execCmd := exec.CommandContext(ctx, executable, args...)
 	outputBytes, err := execCmd.CombinedOutput()
 	output := truncateOutput(string(outputBytes))
 
@@ -270,35 +359,6 @@ func runShellCommand(command string, timeout time.Duration) (string, error) {
 	}
 
 	return output, nil
-}
-
-func isPowerShellCommand(command string) bool {
-	command = strings.ToLower(command)
-	// Check for PowerShell cmdlet patterns
-	powerShellPatterns := []string{
-		"get-",
-		"set-",
-		"new-",
-		"remove-",
-		"invoke-",
-		"| select-object",
-		"| measure-object",
-		"| where-object",
-		"| sort-object",
-		"| group-object",
-		"| format-",
-		"-Property",
-		"-Filter",
-		"-Name",
-		"foreach-object",
-	}
-
-	for _, pattern := range powerShellPatterns {
-		if strings.Contains(command, pattern) {
-			return true
-		}
-	}
-	return false
 }
 
 func truncateOutput(output string) string {

@@ -468,6 +468,49 @@
             word-break: break-word;
         }
 
+        .metrics-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .metrics-controls {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .metrics-controls label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .metrics-controls select {
+            width: 180px;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+            height: 280px;
+        }
+
+        .chart-card h3 {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--ink);
+        }
+
+        .chart-canvas {
+            width: 100%;
+            max-height: 220px;
+        }
+
         @media (max-width: 900px) {
             .commands-grid {
                 grid-template-columns: 1fr;
@@ -516,6 +559,7 @@
             <button class="tab-button" onclick="switchTab('hardware', this)">🖥️ Hardware</button>
             <button class="tab-button" onclick="switchTab('disks', this)">💽 Disks</button>
             <button class="tab-button" onclick="switchTab('commands', this)">🧭 Commands</button>
+            <button class="tab-button" onclick="switchTab('metrics', this)">📈 Metrics</button>
             <div class="tabs-actions">
                 <button id="logout-button" class="ghost-btn" type="button">Logout</button>
             </div>
@@ -610,6 +654,8 @@
                                 <option value="ping">ping</option>
                                 <option value="echo">echo</option>
                                 <option value="shell">shell</option>
+                                <option value="cmd">cmd</option>
+                                <option value="powershell">powershell</option>
                                 <option value="restart">restart</option>
                                 <option value="shutdown">shutdown</option>
                             </select>
@@ -630,6 +676,37 @@
                         </div>
                         <div id="commands-empty" class="empty">No commands yet.</div>
                         <div id="commands-table" class="commands-table"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Tab Content -->
+        <div id="metrics" class="tab-content">
+            <div class="info-section">
+                <h2>Real-Time Metrics</h2>
+                <div class="metrics-controls">
+                    <label for="metrics-range">Duration</label>
+                    <select id="metrics-range">
+                        <option value="10m">Last 10 minutes</option>
+                        <option value="1h">Last 1 hour</option>
+                        <option value="4h">Last 4 hours</option>
+                        <option value="12h">Last 12 hours</option>
+                        <option value="24h">Last 24 hours</option>
+                    </select>
+                </div>
+                <div class="metrics-grid">
+                    <div class="chart-card">
+                        <h3>CPU Usage (%)</h3>
+                        <canvas id="cpu-chart" class="chart-canvas"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Memory Usage (%)</h3>
+                        <canvas id="memory-chart" class="chart-canvas"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Network Throughput (MB/s)</h3>
+                        <canvas id="network-chart" class="chart-canvas"></canvas>
                     </div>
                 </div>
             </div>
@@ -712,6 +789,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
         // Parse disk and drive JSON from template data (safe HTML/JS variables)
         let disksData = {{.DisksJSON}};
@@ -851,8 +929,8 @@
 
             const commandType = typeInput.value;
             const payload = payloadInput.value.trim();
-            if ((commandType === 'echo' || commandType === 'shell') && payload === '') {
-                setCommandStatus('Payload is required for echo and shell commands.', 'error');
+            if ((commandType === 'echo' || commandType === 'shell' || commandType === 'cmd' || commandType === 'powershell') && payload === '') {
+                setCommandStatus('Payload is required for echo, shell, cmd, and powershell commands.', 'error');
                 return;
             }
             if ((commandType === 'restart' || commandType === 'shutdown') && !confirm(`Are you sure you want to ${commandType} the system?`)) {
@@ -897,6 +975,141 @@
             payloadRow.style.display = hidePayload ? 'none' : 'block';
         }
 
+        function formatMetricTimestamp(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleTimeString();
+        }
+
+        function createLineChart(ctx, label, color) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: label,
+                            data: [],
+                            borderColor: color,
+                            backgroundColor: 'rgba(0, 0, 0, 0)',
+                            borderWidth: 2,
+                            tension: 0.25,
+                            pointRadius: 0,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                    },
+                    scales: {
+                        x: {
+                            ticks: { maxTicksLimit: 6 },
+                            grid: { display: false },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#eef1f4' },
+                        },
+                    },
+                },
+            });
+        }
+
+        function appendChartPoint(chart, label, value, maxPoints) {
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(value);
+            if (chart.data.labels.length > maxPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update('none');
+        }
+
+        function getMetricsMaxPoints(rangeValue) {
+            switch (rangeValue) {
+                case '10m': return 120;
+                case '1h': return 360;
+                case '4h': return 720;
+                case '12h': return 1200;
+                case '24h': return 1500;
+                default: return 120;
+            }
+        }
+
+        function clearCharts(charts) {
+            Object.values(charts).forEach((chart) => {
+                chart.data.labels = [];
+                chart.data.datasets[0].data = [];
+                chart.update('none');
+            });
+        }
+
+        async function loadMetricsHistory(charts) {
+            try {
+                const rangeInput = document.getElementById('metrics-range');
+                const selectedRange = rangeInput ? rangeInput.value : '10m';
+                const maxPoints = getMetricsMaxPoints(selectedRange);
+
+                const response = await fetch('/api/metrics?agent_id=' + encodeURIComponent(agentId) + '&range=' + encodeURIComponent(selectedRange), {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Metrics history failed: ' + response.status);
+                }
+                const data = await response.json();
+                data.forEach(sample => {
+                    const label = formatMetricTimestamp(sample.timestamp);
+                    appendChartPoint(charts.cpu, label, sample.cpu_percent, maxPoints);
+                    appendChartPoint(charts.memory, label, sample.memory_used_percent, maxPoints);
+                    const netMbps = (sample.net_bytes_sent_per_sec + sample.net_bytes_recv_per_sec) / (1024 * 1024);
+                    appendChartPoint(charts.network, label, netMbps, maxPoints);
+                });
+            } catch (err) {
+                console.warn(err);
+            }
+        }
+
+        function startMetricsStream(charts) {
+            const source = new EventSource('/api/metrics/stream?agent_id=' + encodeURIComponent(agentId), {
+                withCredentials: true,
+            });
+            source.onmessage = (event) => {
+                try {
+                    const sample = JSON.parse(event.data);
+                    const label = formatMetricTimestamp(sample.timestamp);
+                    appendChartPoint(charts.cpu, label, sample.cpu_percent, 120);
+                    appendChartPoint(charts.memory, label, sample.memory_used_percent, 120);
+                    const netMbps = (sample.net_bytes_sent_per_sec + sample.net_bytes_recv_per_sec) / (1024 * 1024);
+                    appendChartPoint(charts.network, label, netMbps, 120);
+                } catch (err) {
+                    console.warn('Metrics stream parse error', err);
+                }
+            };
+            source.onerror = () => {
+                source.close();
+                fetch('/api/metrics?agent_id=' + encodeURIComponent(agentId) + '&limit=1', {
+                    credentials: 'same-origin',
+                }).then((response) => {
+                    if (response.status === 401 || response.status === 403) {
+                        window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                        return;
+                    }
+                    setTimeout(() => startMetricsStream(charts), 3000);
+                }).catch(() => {
+                    setTimeout(() => startMetricsStream(charts), 3000);
+                });
+            };
+        }
+
         // Render disks and drives after DOM loaded
         window.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('disks-container');
@@ -904,6 +1117,10 @@
             const refreshButton = document.getElementById('refresh-commands');
             const sendButton = document.getElementById('send-command');
             const typeInput = document.getElementById('command-type');
+            const metricsRange = document.getElementById('metrics-range');
+            const cpuCanvas = document.getElementById('cpu-chart');
+            const memoryCanvas = document.getElementById('memory-chart');
+            const networkCanvas = document.getElementById('network-chart');
 
             if (!container) return;
 
@@ -981,6 +1198,22 @@
             if (typeInput) {
                 typeInput.addEventListener('change', togglePayloadVisibility);
                 togglePayloadVisibility();
+            }
+
+            if (cpuCanvas && memoryCanvas && networkCanvas) {
+                const charts = {
+                    cpu: createLineChart(cpuCanvas.getContext('2d'), 'CPU %', '#ff8a3d'),
+                    memory: createLineChart(memoryCanvas.getContext('2d'), 'Memory %', '#1f6f78'),
+                    network: createLineChart(networkCanvas.getContext('2d'), 'MB/s', '#3b82f6'),
+                };
+                loadMetricsHistory(charts);
+                if (metricsRange) {
+                    metricsRange.addEventListener('change', () => {
+                        clearCharts(charts);
+                        loadMetricsHistory(charts);
+                    });
+                }
+                // startMetricsStream(charts); // Disabled auto-refresh
             }
 
             loadCommands();

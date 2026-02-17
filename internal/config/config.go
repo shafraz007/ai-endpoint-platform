@@ -34,6 +34,7 @@ type AgentConfig struct {
 	JWTTTL              time.Duration
 	CommandPollInterval time.Duration
 	CommandTimeout      time.Duration
+	MetricsInterval     time.Duration
 	LogDir              string
 	LogToConsole        bool
 }
@@ -66,6 +67,7 @@ func LoadAgentConfig() AgentConfig {
 		JWTTTL:              getDurationEnv("AGENT_JWT_TTL_SECONDS", 300) * time.Second,
 		CommandPollInterval: getDurationEnv("COMMAND_POLL_INTERVAL_SECONDS", 30) * time.Second,
 		CommandTimeout:      getDurationEnv("COMMAND_TIMEOUT_SECONDS", 60) * time.Second,
+		MetricsInterval:     getDurationEnv("METRICS_INTERVAL_SECONDS", 5) * time.Second,
 		LogDir:              getEnv("LOG_DIR", "logs"),
 		LogToConsole:        getBoolEnv("LOG_TO_CONSOLE", true),
 	}

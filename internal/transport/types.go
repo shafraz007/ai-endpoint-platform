@@ -63,3 +63,17 @@ type CommandAckRequest struct {
 	Output    string `json:"output,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
+
+// MetricsSample represents a single time-series sample for an agent.
+type MetricsSample struct {
+	AgentID              string    `json:"agent_id"`
+	Timestamp            time.Time `json:"timestamp"`
+	CPUPercent           float64   `json:"cpu_percent"`
+	MemoryUsedPercent    float64   `json:"memory_used_percent"`
+	MemoryUsedBytes      uint64    `json:"memory_used_bytes"`
+	MemoryTotalBytes     uint64    `json:"memory_total_bytes"`
+	NetBytesSentPerSec   float64   `json:"net_bytes_sent_per_sec"`
+	NetBytesRecvPerSec   float64   `json:"net_bytes_recv_per_sec"`
+	NetPacketsSentPerSec float64   `json:"net_packets_sent_per_sec"`
+	NetPacketsRecvPerSec float64   `json:"net_packets_recv_per_sec"`
+}

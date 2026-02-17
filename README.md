@@ -37,6 +37,7 @@ A distributed agent-server architecture for comprehensive endpoint monitoring an
 - ✅ Network information (MAC addresses, IP addresses)
 - ✅ Periodic heartbeat sending (configurable, default 30s)
 - ✅ Graceful shutdown handling
+- ✅ Real-time metrics sampling (CPU, memory, network)
 
 #### Server Features
 - ✅ Agent heartbeat reception and processing
@@ -49,6 +50,7 @@ A distributed agent-server architecture for comprehensive endpoint monitoring an
 - ✅ Admin login with DB-backed users and session cookies
 - ✅ Commands queue (server → agent) with acknowledgements
 - ✅ Daily rotating logs for server and agent
+- ✅ Metrics storage and streaming (SSE) for live charts
 
 ### Planned Features (v1.1.0+)
 
@@ -107,6 +109,7 @@ AGENT_JWT_SECRET=your_agent_shared_secret
 AGENT_JWT_TTL_SECONDS=300
 COMMAND_POLL_INTERVAL_SECONDS=30
 COMMAND_TIMEOUT_SECONDS=60
+METRICS_INTERVAL_SECONDS=5
 LOG_DIR=logs
 LOG_TO_CONSOLE=true
 ```
@@ -171,16 +174,30 @@ The server can queue commands for agents. Agents poll for commands and acknowled
 - `GET /api/commands?agent_id=...` (admin) - list recent commands
 - `GET /api/commands/next` (agent) - poll for next command
 - `POST /api/commands/ack` (agent) - acknowledge execution
+- `POST /api/metrics` (agent) - ingest metrics sample
+- `GET /api/metrics?agent_id=...` (admin) - list metrics history
+- `GET /api/metrics/stream?agent_id=...` (admin) - SSE stream of latest metrics
+
+Metrics history endpoint supports optional filters:
+- `range=10m|1h|4h|12h|24h` (preferred)
+- `since=<RFC3339 timestamp>`
+- `limit=<n>`
 
 ### Command Types
 
 - `ping` - returns `pong`
 - `echo` - returns payload as output
-- `shell` - executes payload as a shell command
+- `shell` - executes payload with the platform default shell (`cmd /C` on Windows, `sh -c` on Linux/macOS)
+- `cmd` - executes payload with `cmd /C` (Windows only)
+- `powershell` - executes payload with PowerShell (`powershell` on Windows, `pwsh` on Linux/macOS if installed)
 - `restart` - initiates system restart
 - `shutdown` - initiates system shutdown
 
-On Windows, PowerShell commands are supported by prefixing with PowerShell cmdlets (e.g., `Get-Process`).
+## Real-Time Metrics
+
+Agents sample CPU, memory, and network statistics every `METRICS_INTERVAL_SECONDS` and post to the server.
+The UI renders live charts using Server-Sent Events (SSE) and reads recent history from PostgreSQL.
+Network throughput is displayed as `MB/s`.
 
 ## Project Structure
 

@@ -462,6 +462,10 @@ func main() {
 	mux.HandleFunc("/api/commands/next", commandPollHandler(cfg))
 	mux.HandleFunc("/api/commands/ack", commandAckHandler(cfg))
 
+	// Metrics endpoints
+	mux.HandleFunc("/api/metrics", metricsRouter(cfg))
+	mux.HandleFunc("/api/metrics/stream", metricsStreamHandler(cfg))
+
 	// Admin session endpoints
 	mux.HandleFunc("/admin/login", adminLoginHandler(cfg))
 	mux.HandleFunc("/admin/logout", adminLogoutHandler())

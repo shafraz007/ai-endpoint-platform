@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Login, change-password, and session-timeout pages
 - Default admin seeding (admin/admin) with forced password change
 - Server → agent command pipeline (queue, poll, acknowledge)
-- Command types: ping, echo, shell, restart, shutdown
-- PowerShell detection on Windows for shell commands
+- Command types: ping, echo, shell, cmd, powershell, restart, shutdown
+- Explicit cmd/powershell execution support for remote commands
 - Daily rotating logs for server and agent
 - Commands tab in agent detail UI with history
 
@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agents UI now requires admin login
 - Admin session uses sliding expiration on authenticated requests
 - Default admin seeding uses conflict-safe insert to avoid HA race noise
+- Metrics history API supports duration-based range filters (`10m`, `1h`, `4h`, `12h`, `24h`)
+- Network throughput chart displays `MB/s` instead of `KB/s`
 
 ## [1.0.0] - 2026-02-17
 

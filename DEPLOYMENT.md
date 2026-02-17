@@ -470,6 +470,7 @@ curl -X GET http://localhost:8080/agents
 # On agent machine
 export SERVER_URL=https://ai-endpoint.example.com
 export AGENT_JWT_SECRET=<shared_agent_secret>
+export METRICS_INTERVAL_SECONDS=5
 ./agent
 
 # Watch server logs for heartbeat
