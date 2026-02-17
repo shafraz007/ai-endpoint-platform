@@ -560,6 +560,7 @@
             <button class="tab-button" onclick="switchTab('disks', this)">💽 Disks</button>
             <button class="tab-button" onclick="switchTab('commands', this)">🧭 Commands</button>
             <button class="tab-button" onclick="switchTab('metrics', this)">📈 Metrics</button>
+            <button class="tab-button" onclick="switchTab('os-security', this)">🛡️ OS & Security</button>
             <div class="tabs-actions">
                 <button id="logout-button" class="ghost-btn" type="button">Logout</button>
             </div>
@@ -707,6 +708,93 @@
                     <div class="chart-card">
                         <h3>Network Throughput (MB/s)</h3>
                         <canvas id="network-chart" class="chart-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OS & Security Tab Content -->
+        <div id="os-security" class="tab-content">
+            <div class="info-section">
+                <h2>Operating System</h2>
+
+                <div class="info-row">
+                    <div class="info-label">OS Edition</div>
+                    <div class="info-value">{{if .Agent.OSEdition}}{{.Agent.OSEdition}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Windows 11 Eligibility</div>
+                    <div class="info-value">{{if .Agent.Windows11Eligible}}{{.Agent.Windows11Eligible}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Windows Serial Key</div>
+                    <div class="info-value" style="letter-spacing: 2px;">••••••••••••</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">OS Version</div>
+                    <div class="info-value">{{if .Agent.OSVersion}}{{.Agent.OSVersion}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">OS Build</div>
+                    <div class="info-value">{{if .Agent.OSBuild}}{{.Agent.OSBuild}}{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Agent TLS 1.2 Compatibility</div>
+                    <div class="info-value">
+                        {{if .Agent.TLS12Compatible}}
+                            <span style="color: #2ecc71;">Compatible</span>
+                        {{else}}
+                            <span style="color: #e74c3c;">Not Compatible</span>
+                        {{end}}
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">.NET Framework Version</div>
+                    <div class="info-value">{{if .Agent.DotNetVersion}}<span style="color: #2ecc71;">Meets requirement</span>{{else}}<span class="empty">Not available</span>{{end}}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Office Version</div>
+                    <div class="info-value">{{if .Agent.OfficeVersion}}{{.Agent.OfficeVersion}}{{else}}<span class="empty">Not installed</span>{{end}}</div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h2>Security</h2>
+
+                <div class="info-row">
+                    <div class="info-label">Antivirus</div>
+                    <div class="info-value">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>{{if .Agent.AntivirusName}}{{.Agent.AntivirusName}}{{else}}Windows Defender{{end}}</span>
+                            <span style="color: #2ecc71; font-size: 12px; font-weight: 600;">Active and updated</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Anti Spyware</div>
+                    <div class="info-value">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>{{if .Agent.AntiSpywareName}}{{.Agent.AntiSpywareName}}{{else}}Windows Security Center{{end}}</span>
+                            <span style="color: #2ecc71; font-size: 12px; font-weight: 600;">Active and updated</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Firewall</div>
+                    <div class="info-value">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>{{if .Agent.FirewallName}}{{.Agent.FirewallName}}{{else}}Windows Firewall{{end}}</span>
+                            <span style="color: #2ecc71; font-size: 12px; font-weight: 600;">Active and updated</span>
+                        </div>
                     </div>
                 </div>
             </div>

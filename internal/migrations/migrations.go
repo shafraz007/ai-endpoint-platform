@@ -30,6 +30,10 @@ var migrations = []Migration{
 		Name: "004_create_agent_metrics_table_v1_3_0",
 		Up:   createAgentMetricsTableV1,
 	},
+	{
+		Name: "005_add_os_and_security_columns_v1_4_0",
+		Up:   addOSAndSecurityColumnsV1,
+	},
 }
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -223,6 +227,24 @@ func createAgentMetricsTableV1(ctx context.Context, db *pgxpool.Pool) error {
 	CREATE INDEX IF NOT EXISTS idx_agent_metrics_agent_id ON agent_metrics(agent_id);
 	CREATE INDEX IF NOT EXISTS idx_agent_metrics_timestamp ON agent_metrics(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_agent_metrics_agent_time ON agent_metrics(agent_id, timestamp);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addOSAndSecurityColumnsV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS os_edition VARCHAR(255);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS os_version VARCHAR(50);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS os_build VARCHAR(50);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS windows_11_eligible VARCHAR(255);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS tls_12_compatible BOOLEAN DEFAULT FALSE;
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS dotnet_version VARCHAR(255);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS office_version VARCHAR(255);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS antivirus_name VARCHAR(255);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS antispyware_name VARCHAR(255);
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS firewall_name VARCHAR(255);
 	`
 
 	_, err := db.Exec(ctx, query)

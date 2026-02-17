@@ -37,6 +37,18 @@ type Agent struct {
 	Sound                string
 	SystemDrive          string
 	MACAddresses         string
+	// OS Information
+	OSEdition              string
+	OSVersion              string
+	OSBuild                string
+	Windows11Eligible      string
+	TLS12Compatible        bool
+	DotNetVersion          string
+	OfficeVersion          string
+	// Security Information
+	AntivirusName      string
+	AntiSpywareName    string
+	FirewallName       string
 	// Disk and drive JSON blobs
 	Disks  string
 	Drives string
@@ -55,7 +67,12 @@ func GetAllAgents(ctx context.Context) ([]Agent, error) {
 		COALESCE(bios_version_date, ''), COALESCE(processor, ''),
 		COALESCE(memory, ''), COALESCE(video_card, ''),
 		COALESCE(sound, ''), COALESCE(system_drive, ''),
-		COALESCE(mac_addresses, '')
+		COALESCE(mac_addresses, ''),
+		COALESCE(os_edition, ''), COALESCE(os_version, ''),
+		COALESCE(os_build, ''), COALESCE(windows_11_eligible, ''),
+		COALESCE(tls_12_compatible, FALSE), COALESCE(dotnet_version, ''),
+		COALESCE(office_version, ''), COALESCE(antivirus_name, ''),
+		COALESCE(antispyware_name, ''), COALESCE(firewall_name, '')
 		, COALESCE(disks, ''), COALESCE(drives, '')
 	FROM agents
 	ORDER BY last_seen DESC
@@ -100,6 +117,16 @@ func GetAllAgents(ctx context.Context) ([]Agent, error) {
 			&agent.Sound,
 			&agent.SystemDrive,
 			&agent.MACAddresses,
+			&agent.OSEdition,
+			&agent.OSVersion,
+			&agent.OSBuild,
+			&agent.Windows11Eligible,
+			&agent.TLS12Compatible,
+			&agent.DotNetVersion,
+			&agent.OfficeVersion,
+			&agent.AntivirusName,
+			&agent.AntiSpywareName,
+			&agent.FirewallName,
 			&agent.Disks,
 			&agent.Drives,
 		)
@@ -129,7 +156,12 @@ func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 		COALESCE(bios_version_date, ''), COALESCE(processor, ''),
 		COALESCE(memory, ''), COALESCE(video_card, ''),
 		COALESCE(sound, ''), COALESCE(system_drive, ''),
-		COALESCE(mac_addresses, '')
+		COALESCE(mac_addresses, ''),
+		COALESCE(os_edition, ''), COALESCE(os_version, ''),
+		COALESCE(os_build, ''), COALESCE(windows_11_eligible, ''),
+		COALESCE(tls_12_compatible, FALSE), COALESCE(dotnet_version, ''),
+		COALESCE(office_version, ''), COALESCE(antivirus_name, ''),
+		COALESCE(antispyware_name, ''), COALESCE(firewall_name, '')
 		, COALESCE(disks, ''), COALESCE(drives, '')
 	FROM agents
 	WHERE agent_id = $1
@@ -166,6 +198,16 @@ func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 		&agent.Sound,
 		&agent.SystemDrive,
 		&agent.MACAddresses,
+		&agent.OSEdition,
+		&agent.OSVersion,
+		&agent.OSBuild,
+		&agent.Windows11Eligible,
+		&agent.TLS12Compatible,
+		&agent.DotNetVersion,
+		&agent.OfficeVersion,
+		&agent.AntivirusName,
+		&agent.AntiSpywareName,
+		&agent.FirewallName,
 		&agent.Disks,
 		&agent.Drives,
 	)
