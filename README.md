@@ -110,9 +110,48 @@ AGENT_JWT_TTL_SECONDS=300
 COMMAND_POLL_INTERVAL_SECONDS=30
 COMMAND_TIMEOUT_SECONDS=60
 METRICS_INTERVAL_SECONDS=5
+AGENT_AI_ENDPOINT=https://api.openai.com/v1/chat/completions
+AGENT_AI_API_KEY=your_provider_api_key
+AGENT_AI_MODEL=gpt-4o-mini
+AGENT_AI_SYSTEM_PROMPT=You are an endpoint child AI agent. Reply concisely, actionably, and safely.
+AGENT_AI_PROVIDER=openai
+AGENT_AI_API_VERSION=2024-02-15-preview
+AGENT_AI_DEPLOYMENT=
 LOG_DIR=logs
 LOG_TO_CONSOLE=true
 ```
+
+Provider notes:
+- OpenAI-compatible:
+	- `AGENT_AI_PROVIDER=openai`
+	- `AGENT_AI_ENDPOINT=https://api.openai.com/v1/chat/completions`
+	- Uses `Authorization: Bearer <AGENT_AI_API_KEY>`
+- Azure OpenAI:
+	- `AGENT_AI_PROVIDER=azure_openai`
+	- `AGENT_AI_ENDPOINT=https://<resource>.openai.azure.com`
+	- `AGENT_AI_DEPLOYMENT=<deployment_name>`
+	- `AGENT_AI_API_VERSION=2024-02-15-preview` (or your supported version)
+	- Uses `api-key: <AGENT_AI_API_KEY>` header
+- Ollama (local, free):
+  - `AGENT_AI_PROVIDER=ollama`
+  - `AGENT_AI_ENDPOINT=http://localhost:11434/v1/chat/completions`
+  - `AGENT_AI_MODEL=llama3.2` (or any model you pulled)
+  - `AGENT_AI_API_KEY=` (not required)
+
+### Ollama Quick Start (Windows)
+
+1. Install Ollama from `https://ollama.com/download/windows`
+2. Pull a model:
+	- `ollama pull llama3.2`
+3. Verify local API:
+	- `ollama list`
+	- `curl http://localhost:11434/api/tags`
+4. Set agent environment variables:
+	- `AGENT_AI_PROVIDER=ollama`
+	- `AGENT_AI_ENDPOINT=http://localhost:11434/v1/chat/completions`
+	- `AGENT_AI_MODEL=llama3.2`
+	- `AGENT_AI_API_KEY=`
+5. Restart agent process.
 
 ### Server Environment Variables
 ```bash
@@ -177,11 +216,41 @@ The server can queue commands for agents. Agents poll for commands and acknowled
 - `POST /api/metrics` (agent) - ingest metrics sample
 - `GET /api/metrics?agent_id=...` (admin) - list metrics history
 - `GET /api/metrics/stream?agent_id=...` (admin) - SSE stream of latest metrics
+- `GET /api/chat/messages?scope=global|agent&agent_id=...&limit=...` (admin) - list chat messages
+- `POST /api/chat/messages` (admin) - post a chat message
 
 Metrics history endpoint supports optional filters:
 - `range=10m|1h|4h|12h|24h` (preferred)
 - `since=<RFC3339 timestamp>`
 - `limit=<n>`
+
+## Chat Windows
+
+- Global chat window is available on the agents dashboard (`/agents`).
+- Personal chat window is available on each agent detail page (`/agents/{agent_id}`).
+- Both chats are admin-authenticated and poll every 5 seconds.
+- Personal chat supports command intents:
+	- `cmd: <command>`
+	- `powershell: <command>`
+	- `shell: <command>`
+	- natural language ping requests (for example: `please ping sp.parcelat.com`)
+- Personal chat AI responses include endpoint profile context (agent identity, OS/hardware, and security fields) to improve device-specific answers.
+
+## Governance-Enforced Chat Commands
+
+- For agent-scope chat messages that resolve to executable commands, the server evaluates governance policy before queueing:
+	- denylist (`script_denylist`) is applied first
+	- allowlist (`script_allowlist`) is applied next when non-empty
+- If blocked, the server writes an immediate personal chat response explaining the policy block reason.
+- Matching supports exact command names and prefix wildcard rules (for example: `net*`).
+
+### Governance Query Prompts
+
+- Prompts like `is format command allowed in device profile` are answered deterministically by the server from merged policy state.
+- Response includes:
+	- verdict (`ALLOWED` or `NOT ALLOWED`)
+	- reason (`blocked by denylist`, `not present in allowlist`, and so on)
+	- effective allowlist and denylist for that agent
 
 ### Command Types
 
@@ -192,6 +261,45 @@ Metrics history endpoint supports optional filters:
 - `powershell` - executes payload with PowerShell (`powershell` on Windows, `pwsh` on Linux/macOS if installed)
 - `restart` - initiates system restart
 - `shutdown` - initiates system shutdown
+- `ai_task` - structured Mother→Child AI task payload with child result returned in command acknowledgement output
+
+### MCP Mother/Child AI Task (MVP)
+
+Use `command_type=ai_task` with JSON payload:
+
+```json
+{
+	"task_id": "task-001",
+	"mother_role": "coordinator",
+	"child_intent": "work",
+	"title": "Investigate endpoint issue",
+	"instruction": "Collect process and service status related to VPN client",
+	"context": "Ticket INC-2026-001",
+	"requires_approval": true,
+	"scheduled_at": "2026-02-26T10:30:00Z"
+}
+```
+
+Allowed `mother_role` values:
+- `instructor`
+- `guardian`
+- `approver`
+- `coordinator`
+- `scheduler`
+
+Allowed `child_intent` values:
+- `work`
+- `resolve`
+- `suggest`
+- `identify`
+- `complain`
+
+The agent returns a structured JSON result in command `output` including:
+- task id
+- child intent
+- state (`completed`, `blocked`, or `awaiting_approval`)
+- summary/details
+- timestamp
 
 ## Real-Time Metrics
 

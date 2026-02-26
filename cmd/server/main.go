@@ -26,6 +26,7 @@ var detailTemplate *template.Template
 var loginTemplate *template.Template
 var changePasswordTemplate *template.Template
 var sessionTimeoutTemplate *template.Template
+var settingsTemplate *template.Template
 
 func init() {
 	var err error
@@ -52,6 +53,11 @@ func init() {
 	sessionTimeoutTemplate, err = template.ParseFiles("cmd/server/templates/session-timeout.html")
 	if err != nil {
 		log.Printf("Warning: Failed to parse session-timeout template: %v", err)
+	}
+
+	settingsTemplate, err = template.ParseFiles("cmd/server/templates/settings.html")
+	if err != nil {
+		log.Printf("Warning: Failed to parse settings template: %v", err)
 	}
 }
 
@@ -476,6 +482,19 @@ func main() {
 	mux.HandleFunc("/api/metrics", metricsRouter(cfg))
 	mux.HandleFunc("/api/metrics/stream", metricsStreamHandler(cfg))
 
+	// Governance endpoints (admin only)
+	mux.HandleFunc("/api/categories", categoriesHandler(cfg))
+	mux.HandleFunc("/api/categories/", categoryHandler(cfg))
+	mux.HandleFunc("/api/policies", policiesHandler(cfg))
+	mux.HandleFunc("/api/policies/", policyHandler(cfg))
+	mux.HandleFunc("/api/profiles/scripts", profileHandler(cfg, "script"))
+	mux.HandleFunc("/api/profiles/scripts/", profileHandler(cfg, "script"))
+	mux.HandleFunc("/api/profiles/patches", profileHandler(cfg, "patch"))
+	mux.HandleFunc("/api/profiles/patches/", profileHandler(cfg, "patch"))
+	mux.HandleFunc("/api/groups", groupsHandler(cfg))
+	mux.HandleFunc("/api/groups/", groupRouter(cfg))
+	mux.HandleFunc("/api/chat/messages", chatMessagesHandler(cfg))
+
 	// Admin session endpoints
 	mux.HandleFunc("/admin/login", adminLoginHandler(cfg))
 	mux.HandleFunc("/admin/logout", adminLogoutHandler())
@@ -493,6 +512,9 @@ func main() {
 		}
 		agentsHandler(w, r)
 	})
+
+	// Governance settings page
+	mux.HandleFunc("/settings", governancePageHandler(cfg))
 
 	// Agent detail handler (must have trailing slash to match /agents/...)
 	mux.HandleFunc("/agents/", func(w http.ResponseWriter, r *http.Request) {

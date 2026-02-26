@@ -34,6 +34,14 @@ var migrations = []Migration{
 		Name: "005_add_os_and_security_columns_v1_4_0",
 		Up:   addOSAndSecurityColumnsV1,
 	},
+	{
+		Name: "006_create_governance_tables_v1_5_0",
+		Up:   createGovernanceTablesV1,
+	},
+	{
+		Name: "007_create_chat_messages_table_v1_6_0",
+		Up:   createChatMessagesTableV1,
+	},
 }
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -251,11 +259,114 @@ func addOSAndSecurityColumnsV1(ctx context.Context, db *pgxpool.Pool) error {
 	return err
 }
 
+func createGovernanceTablesV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS agent_categories (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(120) UNIQUE NOT NULL,
+		description TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS group_policies (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(120) UNIQUE NOT NULL,
+		description TEXT,
+		script_allowlist TEXT NOT NULL DEFAULT '[]',
+		script_denylist TEXT NOT NULL DEFAULT '[]',
+		patch_windows TEXT NOT NULL DEFAULT '[]',
+		max_concurrent_scripts INT NOT NULL DEFAULT 1,
+		require_admin_approval BOOLEAN NOT NULL DEFAULT FALSE,
+		online_only BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS script_profiles (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(120) UNIQUE NOT NULL,
+		run_as VARCHAR(20) NOT NULL DEFAULT 'system',
+		timeout_seconds INT NOT NULL DEFAULT 3600,
+		retries INT NOT NULL DEFAULT 0,
+		reboot_behavior VARCHAR(20) NOT NULL DEFAULT 'none',
+		working_dir TEXT,
+		env_vars TEXT NOT NULL DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS patch_profiles (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(120) UNIQUE NOT NULL,
+		run_as VARCHAR(20) NOT NULL DEFAULT 'system',
+		timeout_seconds INT NOT NULL DEFAULT 7200,
+		retries INT NOT NULL DEFAULT 0,
+		reboot_behavior VARCHAR(20) NOT NULL DEFAULT 'reboot_if_required',
+		working_dir TEXT,
+		env_vars TEXT NOT NULL DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS agent_groups (
+		id SERIAL PRIMARY KEY,
+		name VARCHAR(120) UNIQUE NOT NULL,
+		category_id INT REFERENCES agent_categories(id) ON DELETE SET NULL,
+		policy_id INT REFERENCES group_policies(id) ON DELETE SET NULL,
+		script_profile_id INT REFERENCES script_profiles(id) ON DELETE SET NULL,
+		patch_profile_id INT REFERENCES patch_profiles(id) ON DELETE SET NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS agent_group_members (
+		group_id INT NOT NULL REFERENCES agent_groups(id) ON DELETE CASCADE,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (group_id, agent_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_groups_category ON agent_groups(category_id);
+	CREATE INDEX IF NOT EXISTS idx_agent_groups_policy ON agent_groups(policy_id);
+	CREATE INDEX IF NOT EXISTS idx_group_members_agent ON agent_group_members(agent_id);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createChatMessagesTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS chat_messages (
+		id BIGSERIAL PRIMARY KEY,
+		scope VARCHAR(20) NOT NULL,
+		agent_id VARCHAR(255) REFERENCES agents(agent_id) ON DELETE CASCADE,
+		sender VARCHAR(255) NOT NULL,
+		message TEXT NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_chat_messages_scope_created ON chat_messages(scope, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_chat_messages_agent_created ON chat_messages(agent_id, created_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
 // RecreateAndRunMigrations drops existing migration state and tables then
 // re-applies all migrations from scratch. Use with caution on production.
 func RecreateAndRunMigrations(ctx context.Context, db *pgxpool.Pool) error {
 	// Drop tables that may have been created by previous runs
 	dropQuery := `
+	DROP TABLE IF EXISTS chat_messages CASCADE;
+	DROP TABLE IF EXISTS agent_group_members CASCADE;
+	DROP TABLE IF EXISTS agent_groups CASCADE;
+	DROP TABLE IF EXISTS patch_profiles CASCADE;
+	DROP TABLE IF EXISTS script_profiles CASCADE;
+	DROP TABLE IF EXISTS group_policies CASCADE;
+	DROP TABLE IF EXISTS agent_categories CASCADE;
 	DROP TABLE IF EXISTS agent_commands CASCADE;
 	DROP TABLE IF EXISTS agents CASCADE;
 	DROP TABLE IF EXISTS schema_migrations CASCADE;

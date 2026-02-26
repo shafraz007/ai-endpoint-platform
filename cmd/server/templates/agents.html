@@ -167,6 +167,87 @@
             font-size: 13px;
         }
 
+        .chat-panel {
+            margin-top: 24px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .chat-title {
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+        .chat-list {
+            border: 1px solid #e6eaed;
+            border-radius: 8px;
+            background: #f8f9fa;
+            padding: 12px;
+            min-height: 220px;
+            max-height: 320px;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+
+        .chat-empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        .chat-item {
+            border-bottom: 1px solid #e6eaed;
+            padding: 8px 0;
+        }
+
+        .chat-item:last-child {
+            border-bottom: none;
+        }
+
+        .chat-meta {
+            font-size: 12px;
+            color: #777;
+            margin-bottom: 4px;
+        }
+
+        .chat-text {
+            color: #333;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .chat-compose {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-compose textarea {
+            flex: 1;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 70px;
+            resize: vertical;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .chat-status {
+            font-size: 13px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .chat-status.error {
+            color: #b91c1c;
+        }
+
+        .chat-status.ok {
+            color: #166534;
+        }
+
         .refresh-btn {
             background: #667eea;
             color: white;
@@ -192,6 +273,12 @@
             flex-wrap: wrap;
         }
 
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
         .ghost-btn {
             background: transparent;
             color: #667eea;
@@ -212,7 +299,10 @@
                     <h1>🚀 AI Endpoint Platform</h1>
                     <p class="header-info">Agent Management Dashboard</p>
                 </div>
-                <button class="ghost-btn" id="logout-button" type="button">Logout</button>
+                <div class="header-actions">
+                    <a class="ghost-btn" href="/settings">Governance</a>
+                    <button class="ghost-btn" id="logout-button" type="button">Logout</button>
+                </div>
             </div>
             <div class="stats">
                 <div class="stat-card">
@@ -273,18 +363,151 @@
             {{end}}
         </div>
 
+        <div class="chat-panel">
+            <h2 class="chat-title">💬 Global Chat</h2>
+            <div id="global-chat-list" class="chat-list">
+                <div class="chat-empty">No messages yet.</div>
+            </div>
+            <div class="chat-compose">
+                <textarea id="global-chat-input" placeholder="Type a message for everyone..."></textarea>
+                <button id="global-chat-send" class="refresh-btn" type="button">Send</button>
+            </div>
+            <div id="global-chat-status" class="chat-status"></div>
+        </div>
+
         <div class="footer">
             <p>AI Endpoint Platform • Last updated: {{.LastUpdated}}</p>
         </div>
     </div>
     <script>
+        function formatTimestamp(value) {
+            if (!value) return 'n/a';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return 'n/a';
+            return date.toLocaleString();
+        }
+
+        function setGlobalChatStatus(message, type) {
+            const statusEl = document.getElementById('global-chat-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'chat-status' + (type ? ' ' + type : '');
+        }
+
+        function renderGlobalChat(messages) {
+            const listEl = document.getElementById('global-chat-list');
+            if (!listEl) return;
+
+            if (!messages || messages.length === 0) {
+                listEl.innerHTML = '<div class="chat-empty">No messages yet.</div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+            messages.forEach((item) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chat-item';
+
+                const meta = document.createElement('div');
+                meta.className = 'chat-meta';
+                meta.textContent = item.sender + ' • ' + formatTimestamp(item.created_at);
+
+                const text = document.createElement('div');
+                text.className = 'chat-text';
+                text.textContent = item.message;
+
+                wrapper.appendChild(meta);
+                wrapper.appendChild(text);
+                listEl.appendChild(wrapper);
+            });
+
+            listEl.scrollTop = listEl.scrollHeight;
+        }
+
+        async function loadGlobalChat() {
+            try {
+                const response = await fetch('/api/chat/messages?scope=global&limit=100', {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Global chat load failed: ' + response.status);
+                }
+
+                const data = await response.json();
+                renderGlobalChat(data);
+            } catch (err) {
+                setGlobalChatStatus(err.message || 'Failed to load global chat.', 'error');
+            }
+        }
+
+        async function sendGlobalChatMessage() {
+            const input = document.getElementById('global-chat-input');
+            if (!input) return;
+            const message = input.value.trim();
+            if (!message) {
+                setGlobalChatStatus('Message is required.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/chat/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        scope: 'global',
+                        message: message,
+                    }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Global chat send failed: ' + response.status);
+                }
+
+                input.value = '';
+                setGlobalChatStatus('Message sent.', 'ok');
+                await loadGlobalChat();
+            } catch (err) {
+                setGlobalChatStatus(err.message || 'Failed to send message.', 'error');
+            }
+        }
+
         const logoutButton = document.getElementById('logout-button');
+        const globalChatSendButton = document.getElementById('global-chat-send');
+        const globalChatInput = document.getElementById('global-chat-input');
+
         if (logoutButton) {
             logoutButton.addEventListener('click', async () => {
                 await fetch('/admin/logout', { method: 'POST' });
                 window.location.href = '/';
             });
         }
+
+        if (globalChatSendButton) {
+            globalChatSendButton.addEventListener('click', sendGlobalChatMessage);
+        }
+
+        if (globalChatInput) {
+            globalChatInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    sendGlobalChatMessage();
+                }
+            });
+        }
+
+        loadGlobalChat();
+        setInterval(loadGlobalChat, 5000);
     </script>
 </body>
 </html>

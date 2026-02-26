@@ -5,6 +5,34 @@ All notable changes to the AI Endpoint Platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-26
+
+### Added
+
+- Agent AI task model with personal chat context, including endpoint profile injection (hostname, OS, hardware, security)
+- Local AI provider support in agent config (`openai`, `azure_openai`, `ollama`) with provider-specific request target handling
+- Personal and global chat APIs with UI integration in dashboard and agent detail views
+- Governance settings page and CRUD endpoints for categories, policies, profiles, groups, and members
+- Governance policy merge resolver for agent command allow/deny evaluation across group memberships
+
+### Changed
+
+- Personal chat now executes supported command intents (`cmd:`, `powershell:`, `shell:`, and natural-language ping targets)
+- Chat-triggered command execution now enforces governance `script_allowlist` and `script_denylist` before command queueing
+- Governance query prompts such as "is format command allowed" now return deterministic policy-based answers from server state instead of LLM interpretation
+- Command acknowledgement path relays `ai_task` output back into personal chat as structured agent responses
+
+## [1.2.0] - 2026-02-17
+
+### Added
+
+- Governance settings page for categories, groups, policies, and profiles
+- Agent categories with descriptions and CRUD API
+- Group policies with allow/deny lists, patch windows, concurrency, approval, and online-only rules
+- Script and patch execution profiles with run-as, timeout, retries, reboot behavior, working dir, and env vars
+- Agent group management with policy/profile assignments and membership endpoints
+- Database migration (006) for governance tables
+
 ## [1.1.0] - 2026-02-17
 
 ### Added

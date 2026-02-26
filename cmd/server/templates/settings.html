@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Governance Settings</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-1: #0c2d24;
+            --bg-2: #0f4c5c;
+            --accent: #ff9f1c;
+            --accent-soft: #ffe8c2;
+            --surface: #ffffff;
+            --ink: #1f2933;
+            --muted: #5f6c75;
+            --line: #e6eaed;
+            --shadow: rgba(0, 0, 0, 0.12);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--ink);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: var(--surface);
+            padding: 24px 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 14px var(--shadow);
+            margin-bottom: 24px;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        h1 {
+            font-size: 1.8em;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .ghost-btn {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent-soft);
+            padding: 8px 14px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .section {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 6px 14px var(--shadow);
+            padding: 22px;
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            font-size: 1.2em;
+            margin-bottom: 16px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 90px;
+            resize: vertical;
+        }
+
+        .action-row {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .primary-btn {
+            background: var(--accent);
+            color: #1f2933;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--line);
+            font-size: 13px;
+        }
+
+        th {
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--muted);
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: #7a4a00;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .danger-btn {
+            background: transparent;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox {
+            width: auto;
+        }
+
+        .footer {
+            text-align: center;
+            color: #f1f5f9;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+
+        .autocomplete-container {
+            position: relative;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 8px var(--shadow);
+        }
+
+        .autocomplete-list.active {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .autocomplete-item:hover {
+            background: var(--accent-soft);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>Governance Settings</h1>
+                    <div class="subtitle">Manage agent categories, grouping, policies, and execution profiles.</div>
+                </div>
+                <div class="nav-actions">
+                    <a class="ghost-btn" href="/agents">Back to Agents</a>
+                </div>
+            </div>
+        </header>
+
+        <div id="status-message" style="display: none; padding: 12px; margin-bottom: 20px; border-radius: 8px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
+
+        <section class="section">
+            <h2>Agent Categories</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Name</label>
+                    <input id="category-name" placeholder="Finance endpoints">
+                </div>
+                <div>
+                    <label>Description</label>
+                    <input id="category-description" placeholder="Sensitive business data">
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="createCategory()">Add Category</button>
+            </div>
+            <table id="category-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>Group Policies</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Name</label>
+                    <input id="policy-name" placeholder="Standard Workstations">
+                </div>
+                <div>
+                    <label>Description</label>
+                    <input id="policy-description" placeholder="Default script and patch controls">
+                </div>
+                <div>
+                    <label>Script Allowlist (comma)</label>
+                    <input id="policy-allowlist" placeholder="ping, inventory">
+                </div>
+                <div>
+                    <label>Script Denylist (comma)</label>
+                    <input id="policy-denylist" placeholder="format, wipe">
+                </div>
+                <div>
+                    <label>Patch Windows (JSON)</label>
+                    <textarea id="policy-windows" placeholder='[{"day":"sat","start":"22:00","end":"02:00"}]'></textarea>
+                </div>
+                <div>
+                    <label>Max Concurrent Scripts</label>
+                    <input id="policy-max" type="number" min="1" value="1">
+                </div>
+                <div class="inline">
+                    <input id="policy-approval" class="checkbox" type="checkbox">
+                    <label>Require Admin Approval</label>
+                </div>
+                <div class="inline">
+                    <input id="policy-online" class="checkbox" type="checkbox" checked>
+                    <label>Agent Online Only</label>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="createPolicy()">Add Policy</button>
+            </div>
+            <table id="policy-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>Script Execution Profiles</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Name</label>
+                    <input id="script-name" placeholder="High trust">
+                </div>
+                <div>
+                    <label>Run As</label>
+                    <select id="script-runas">
+                        <option value="system">System</option>
+                        <option value="user">User</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Timeout (seconds)</label>
+                    <input id="script-timeout" type="number" min="30" value="3600">
+                </div>
+                <div>
+                    <label>Retries</label>
+                    <input id="script-retries" type="number" min="0" value="0">
+                </div>
+                <div>
+                    <label>Reboot Behavior</label>
+                    <select id="script-reboot">
+                        <option value="none">None</option>
+                        <option value="soft">Soft</option>
+                        <option value="hard">Hard</option>
+                        <option value="reboot_if_required">Reboot if required</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Working Directory</label>
+                    <input id="script-workdir" placeholder="C:\\Scripts">
+                </div>
+                <div>
+                    <label>Environment Variables (JSON)</label>
+                    <textarea id="script-env" placeholder='{"KEY":"VALUE"}'></textarea>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="createProfile('script')">Add Script Profile</button>
+            </div>
+            <table id="script-profile-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>Patch Execution Profiles</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Name</label>
+                    <input id="patch-name" placeholder="Maintenance window">
+                </div>
+                <div>
+                    <label>Run As</label>
+                    <select id="patch-runas">
+                        <option value="system">System</option>
+                        <option value="user">User</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Timeout (seconds)</label>
+                    <input id="patch-timeout" type="number" min="30" value="7200">
+                </div>
+                <div>
+                    <label>Retries</label>
+                    <input id="patch-retries" type="number" min="0" value="0">
+                </div>
+                <div>
+                    <label>Reboot Behavior</label>
+                    <select id="patch-reboot">
+                        <option value="reboot_if_required">Reboot if required</option>
+                        <option value="none">None</option>
+                        <option value="soft">Soft</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Working Directory</label>
+                    <input id="patch-workdir" placeholder="/var/patches">
+                </div>
+                <div>
+                    <label>Environment Variables (JSON)</label>
+                    <textarea id="patch-env" placeholder='{"REGION":"us-east"}'></textarea>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="createProfile('patch')">Add Patch Profile</button>
+            </div>
+            <table id="patch-profile-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>Agent Groups</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Name</label>
+                    <input id="group-name" placeholder="Accounting Laptops">
+                </div>
+                <div>
+                    <label>Category</label>
+                    <select id="group-category"></select>
+                </div>
+                <div>
+                    <label>Policy</label>
+                    <select id="group-policy"></select>
+                </div>
+                <div>
+                    <label>Script Profile</label>
+                    <select id="group-script-profile"></select>
+                </div>
+                <div>
+                    <label>Patch Profile</label>
+                    <select id="group-patch-profile"></select>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="createGroup()">Add Group</button>
+            </div>
+            <table id="group-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>Group Members</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Group</label>
+                    <select id="member-group"></select>
+                </div>
+                <div class="autocomplete-container">
+                    <label>Agent ID</label>
+                    <input id="member-agent" placeholder="agent-uuid" autocomplete="off">
+                    <div id="autocomplete-list" class="autocomplete-list"></div>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="addMember()">Add Member</button>
+            </div>
+            <div class="muted" style="margin-bottom: 10px;">Members load when you pick a group.</div>
+            <table id="member-table"></table>
+        </section>
+
+        <div class="footer">AI Endpoint Platform • Governance</div>
+    </div>
+
+    <script>
+        const api = {
+            categories: '/api/categories',
+            policies: '/api/policies',
+            scripts: '/api/profiles/scripts',
+            patches: '/api/profiles/patches',
+            groups: '/api/groups',
+            agents: '/api/agents'
+        };
+
+        // Cache for lookup data
+        let cachedData = {
+            categories: [],
+            policies: [],
+            scripts: [],
+            patches: [],
+            agents: []
+        };
+
+        function showStatus(message, type) {
+            const el = document.getElementById('status-message');
+            if (!el) return;
+            if (type === 'error') {
+                el.style.background = '#f8d7da';
+                el.style.borderColor = '#f5c6cb';
+                el.style.color = '#721c24';
+            } else if (type === 'success') {
+                el.style.background = '#d4edda';
+                el.style.borderColor = '#c3e6cb';
+                el.style.color = '#155724';
+            } else {
+                el.style.background = '#fff3cd';
+                el.style.borderColor = '#ffeaa7';
+                el.style.color = '#856404';
+            }
+            el.textContent = message;
+            el.style.display = 'block';
+        }
+
+        function hideStatus() {
+            const el = document.getElementById('status-message');
+            if (!el) return;
+            el.style.display = 'none';
+        }
+
+        function parseComma(value) {
+            return value
+                .split(',')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+        }
+
+        function parseJSON(value, fallback) {
+            if (!value) return fallback;
+            try {
+                return JSON.parse(value);
+            } catch (err) {
+                return fallback;
+            }
+        }
+
+        async function apiFetch(url, options) {
+            const opts = options || {};
+            opts.credentials = 'same-origin';
+            opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+            const res = await fetch(url, opts);
+            if (!res.ok) {
+                const text = await res.text();
+                console.warn(`API ${url} returned ${res.status}: ${text}`);
+                throw new Error(`${res.status}: ${text || 'Request failed'}`);
+            }
+            if (res.status === 204) return null;
+            return res.json();
+        }
+
+        function renderTable(el, headers, rows) {
+            if (!el) return;
+            el.innerHTML = '';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            headers.forEach(h => {
+                const th = document.createElement('th');
+                th.textContent = h;
+                headRow.appendChild(th);
+            });
+            thead.appendChild(headRow);
+            el.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            rows.forEach(row => tbody.appendChild(row));
+            el.appendChild(tbody);
+        }
+
+        function optionize(select, items, placeholder) {
+            if (!select) {
+                console.warn('Select element not found');
+                return;
+            }
+            select.innerHTML = '';
+            const empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = placeholder;
+            select.appendChild(empty);
+            if (items && Array.isArray(items)) {
+                items.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item.id;
+                    opt.textContent = item.name;
+                    select.appendChild(opt);
+                });
+            }
+        }
+
+        async function loadAll() {
+            try {
+                showStatus('Loading governance data...', 'info');
+                const [categories, policies, scripts, patches, groups, agents] = await Promise.all([
+                    apiFetch(api.categories).catch(e => { console.error('Failed to load categories:', e); return []; }),
+                    apiFetch(api.policies).catch(e => { console.error('Failed to load policies:', e); return []; }),
+                    apiFetch(api.scripts).catch(e => { console.error('Failed to load script profiles:', e); return []; }),
+                    apiFetch(api.patches).catch(e => { console.error('Failed to load patch profiles:', e); return []; }),
+                    apiFetch(api.groups).catch(e => { console.error('Failed to load groups:', e); return []; }),
+                    apiFetch(api.agents).catch(e => { console.error('Failed to load agents:', e); return []; })
+                ]);
+
+                // Cache the data for lookups
+                cachedData.categories = categories || [];
+                cachedData.policies = policies || [];
+                cachedData.scripts = scripts || [];
+                cachedData.patches = patches || [];
+                cachedData.agents = agents || [];
+
+                renderCategories(categories || []);
+                renderPolicies(policies || []);
+                renderProfiles('script', scripts || []);
+                renderProfiles('patch', patches || []);
+                renderGroups(groups || []);
+
+                optionize(document.getElementById('group-category'), categories || [], 'None');
+                optionize(document.getElementById('group-policy'), policies || [], 'None');
+                optionize(document.getElementById('group-script-profile'), scripts || [], 'None');
+                optionize(document.getElementById('group-patch-profile'), patches || [], 'None');
+                optionize(document.getElementById('member-group'), groups || [], 'Select group');
+                
+                hideStatus();
+                console.log('Governance data loaded successfully');
+            } catch (error) {
+                const msg = `Error loading governance data: ${error.message}. Check console for details.`;
+                showStatus(msg, 'error');
+                console.error('Fatal error in loadAll:', error);
+            }
+        }
+
+        async function createCategory() {
+            await apiFetch(api.categories, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: document.getElementById('category-name').value,
+                    description: document.getElementById('category-description').value
+                })
+            });
+            await loadAll();
+        }
+
+        async function createPolicy() {
+            await apiFetch(api.policies, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: document.getElementById('policy-name').value,
+                    description: document.getElementById('policy-description').value,
+                    script_allowlist: parseComma(document.getElementById('policy-allowlist').value),
+                    script_denylist: parseComma(document.getElementById('policy-denylist').value),
+                    patch_windows: parseJSON(document.getElementById('policy-windows').value, []),
+                    max_concurrent_scripts: Number(document.getElementById('policy-max').value || 1),
+                    require_admin_approval: document.getElementById('policy-approval').checked,
+                    online_only: document.getElementById('policy-online').checked
+                })
+            });
+            await loadAll();
+        }
+
+        async function createProfile(kind) {
+            const prefix = kind === 'script' ? 'script' : 'patch';
+            await apiFetch(kind === 'script' ? api.scripts : api.patches, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: document.getElementById(prefix + '-name').value,
+                    run_as: document.getElementById(prefix + '-runas').value,
+                    timeout_seconds: Number(document.getElementById(prefix + '-timeout').value || 3600),
+                    retries: Number(document.getElementById(prefix + '-retries').value || 0),
+                    reboot_behavior: document.getElementById(prefix + '-reboot').value,
+                    working_dir: document.getElementById(prefix + '-workdir').value,
+                    env_vars: parseJSON(document.getElementById(prefix + '-env').value, {})
+                })
+            });
+            await loadAll();
+        }
+
+        async function createGroup() {
+            await apiFetch(api.groups, {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: document.getElementById('group-name').value,
+                    category_id: toInt(document.getElementById('group-category').value),
+                    policy_id: toInt(document.getElementById('group-policy').value),
+                    script_profile_id: toInt(document.getElementById('group-script-profile').value),
+                    patch_profile_id: toInt(document.getElementById('group-patch-profile').value)
+                })
+            });
+            await loadAll();
+        }
+
+        async function addMember() {
+            const groupId = document.getElementById('member-group').value;
+            if (!groupId) return;
+            await apiFetch(api.groups + '/' + groupId + '/members', {
+                method: 'POST',
+                body: JSON.stringify({ agent_id: document.getElementById('member-agent').value })
+            });
+            await loadMembers(groupId);
+        }
+
+        function toInt(value) {
+            if (!value) return null;
+            const parsed = parseInt(value, 10);
+            return Number.isNaN(parsed) ? null : parsed;
+        }
+
+        function renderCategories(categories) {
+            const table = document.getElementById('category-table');
+            const rows = categories.map(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.description || '-'}</td>
+                <td><button class="danger-btn" onclick="deleteCategory(${item.id})">Delete</button></td>`;
+                return tr;
+            });
+            renderTable(table, ['ID', 'Name', 'Description', ''], rows);
+        }
+
+        function renderPolicies(policies) {
+            const table = document.getElementById('policy-table');
+            const rows = policies.map(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.max_concurrent_scripts}</td>
+                <td><span class="pill">${item.online_only ? 'Online only' : 'Any state'}</span></td>
+                <td class="muted">${JSON.stringify(item.patch_windows)}</td>
+                <td><button class="danger-btn" onclick="deletePolicy(${item.id})">Delete</button></td>`;
+                return tr;
+            });
+            renderTable(table, ['ID', 'Name', 'Max Scripts', 'Mode', 'Patch Windows', ''], rows);
+        }
+
+        function renderProfiles(kind, profiles) {
+            const table = document.getElementById(kind + '-profile-table');
+            const rows = profiles.map(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.run_as}</td>
+                <td>${item.timeout_seconds}s</td><td>${item.retries}</td>
+                <td>${item.reboot_behavior}</td>
+                <td><button class="danger-btn" onclick="deleteProfile('${kind}', ${item.id})">Delete</button></td>`;
+                return tr;
+            });
+            renderTable(table, ['ID', 'Name', 'Run As', 'Timeout', 'Retries', 'Reboot', ''], rows);
+        }
+
+        function renderGroups(groups) {
+            const table = document.getElementById('group-table');
+            const rows = groups.map(item => {
+                // Look up names from cached data
+                const categoryName = cachedData.categories.find(c => c.id === item.category_id)?.name || '-';
+                const policyName = cachedData.policies.find(p => p.id === item.policy_id)?.name || '-';
+                const scriptName = cachedData.scripts.find(s => s.id === item.script_profile_id)?.name || '-';
+                const patchName = cachedData.patches.find(p => p.id === item.patch_profile_id)?.name || '-';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td>
+                <td>${categoryName}</td>
+                <td>${policyName}</td>
+                <td>${scriptName}</td>
+                <td>${patchName}</td>
+                <td><button class="danger-btn" onclick="deleteGroup(${item.id})">Delete</button></td>`;
+                return tr;
+            });
+            renderTable(table, ['ID', 'Name', 'Category', 'Policy', 'Script', 'Patch', ''], rows);
+        }
+
+        async function loadMembers(groupId) {
+            const table = document.getElementById('member-table');
+            if (!groupId) {
+                renderTable(table, ['Agent ID', 'Hostname', ''], []);
+                return;
+            }
+            const list = await apiFetch(api.groups + '/' + groupId + '/members');
+            const rows = list.map(item => {
+                // Look up agent details to get hostname
+                const agent = cachedData.agents.find(a => a.id === item.agent_id);
+                const hostname = agent?.hostname || '-';
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.agent_id}</td>
+                <td>${hostname}</td>
+                <td><button class="danger-btn" onclick="removeMember(${groupId}, '${item.agent_id}')">Remove</button></td>`;
+                return tr;
+            });
+            renderTable(table, ['Agent ID', 'Hostname', ''], rows);
+        }
+
+        function setupAgentAutocomplete() {
+            const input = document.getElementById('member-agent');
+            const listContainer = document.getElementById('autocomplete-list');
+
+            input.addEventListener('input', () => {
+                const value = input.value.toLowerCase().trim();
+                
+                if (!value) {
+                    listContainer.classList.remove('active');
+                    return;
+                }
+
+                // Filter agents matching input (by ID or hostname)
+                const matches = cachedData.agents.filter(agent => 
+                    agent.id.toLowerCase().includes(value) ||
+                    (agent.hostname && agent.hostname.toLowerCase().includes(value))
+                ).slice(0, 10); // Limit to 10 results
+
+                if (matches.length === 0) {
+                    listContainer.classList.remove('active');
+                    return;
+                }
+
+                // Build autocomplete list
+                listContainer.innerHTML = matches.map(agent => 
+                    `<div class="autocomplete-item" data-id="${agent.id}" data-hostname="${agent.hostname || 'N/A'}">
+                        ${agent.hostname ? agent.hostname : '(no hostname)'} - ${agent.id}
+                    </div>`
+                ).join('');
+
+                // Add click handlers
+                document.querySelectorAll('.autocomplete-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        input.value = item.getAttribute('data-id');
+                        listContainer.classList.remove('active');
+                    });
+                });
+
+                listContainer.classList.add('active');
+            });
+
+            // Hide list when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !listContainer.contains(e.target)) {
+                    listContainer.classList.remove('active');
+                }
+            });
+        }
+
+        async function deleteCategory(id) {
+            await apiFetch(api.categories + '/' + id, { method: 'DELETE' });
+            await loadAll();
+        }
+
+        async function deletePolicy(id) {
+            await apiFetch(api.policies + '/' + id, { method: 'DELETE' });
+            await loadAll();
+        }
+
+        async function deleteProfile(kind, id) {
+            const url = kind === 'script' ? api.scripts : api.patches;
+            await apiFetch(url + '/' + id, { method: 'DELETE' });
+            await loadAll();
+        }
+
+        async function deleteGroup(id) {
+            await apiFetch(api.groups + '/' + id, { method: 'DELETE' });
+            await loadAll();
+        }
+
+        async function removeMember(groupId, agentId) {
+            await apiFetch(api.groups + '/' + groupId + '/members/' + agentId, { method: 'DELETE' });
+            await loadMembers(groupId);
+        }
+
+        document.getElementById('member-group').addEventListener('change', (event) => {
+            loadMembers(event.target.value);
+        });
+
+        loadAll().then(() => {
+            setupAgentAutocomplete();
+        }).catch(error => {
+            console.error('Fatal error loading governance data:', error);
+            alert('Failed to load governance settings. Check console for details.');
+        });
+    </script>
+</body>
+</html>

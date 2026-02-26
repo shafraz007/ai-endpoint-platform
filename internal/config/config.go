@@ -37,6 +37,13 @@ type AgentConfig struct {
 	MetricsInterval     time.Duration
 	LogDir              string
 	LogToConsole        bool
+	AIEndpoint          string
+	AIAPIKey            string
+	AIModel             string
+	AISystemPrompt      string
+	AIProvider          string
+	AIApiVersion        string
+	AIDeployment        string
 }
 
 func LoadServerConfig() ServerConfig {
@@ -70,6 +77,13 @@ func LoadAgentConfig() AgentConfig {
 		MetricsInterval:     getDurationEnv("METRICS_INTERVAL_SECONDS", 5) * time.Second,
 		LogDir:              getEnv("LOG_DIR", "logs"),
 		LogToConsole:        getBoolEnv("LOG_TO_CONSOLE", true),
+		AIEndpoint:          getEnv("AGENT_AI_ENDPOINT", "https://api.openai.com/v1/chat/completions"),
+		AIAPIKey:            getEnv("AGENT_AI_API_KEY", ""),
+		AIModel:             getEnv("AGENT_AI_MODEL", "gpt-4o-mini"),
+		AISystemPrompt:      getEnv("AGENT_AI_SYSTEM_PROMPT", "You are an endpoint child AI agent. Reply concisely, actionably, and safely."),
+		AIProvider:          getEnv("AGENT_AI_PROVIDER", "openai"),
+		AIApiVersion:        getEnv("AGENT_AI_API_VERSION", "2024-02-15-preview"),
+		AIDeployment:        getEnv("AGENT_AI_DEPLOYMENT", ""),
 	}
 }
 

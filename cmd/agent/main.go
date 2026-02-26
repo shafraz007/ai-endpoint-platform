@@ -7,15 +7,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/shafraz007/ai-endpoint-platform/internal/agent"
+	"github.com/shafraz007/ai-endpoint-platform/internal/ai"
 	"github.com/shafraz007/ai-endpoint-platform/internal/auth"
 	"github.com/shafraz007/ai-endpoint-platform/internal/config"
 	"github.com/shafraz007/ai-endpoint-platform/internal/logging"
@@ -129,7 +132,7 @@ func main() {
 		case <-metricsTicker.C:
 			sendMetrics(httpClient, cfg, sysInfo.AgentID, metricsCollector)
 		case <-commandTick:
-			pollAndExecuteCommand(httpClient, cfg, sysInfo.AgentID)
+			pollAndExecuteCommand(httpClient, cfg, sysInfo.AgentID, sysInfo, osInfo)
 		}
 	}
 }
@@ -241,7 +244,7 @@ func sendMetrics(httpClient *http.Client, cfg config.AgentConfig, agentID string
 	}
 }
 
-func pollAndExecuteCommand(httpClient *http.Client, cfg config.AgentConfig, agentID string) {
+func pollAndExecuteCommand(httpClient *http.Client, cfg config.AgentConfig, agentID string, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) {
 	if cfg.JWTSecret == "" {
 		return
 	}
@@ -281,7 +284,7 @@ func pollAndExecuteCommand(httpClient *http.Client, cfg config.AgentConfig, agen
 		return
 	}
 
-	status, output, errMsg := executeCommand(cmd, cfg)
+	status, output, errMsg := executeCommand(cmd, cfg, sysInfo, osInfo)
 	ack := transport.CommandAckRequest{
 		CommandID: cmd.ID,
 		Status:    status,
@@ -294,7 +297,7 @@ func pollAndExecuteCommand(httpClient *http.Client, cfg config.AgentConfig, agen
 	}
 }
 
-func executeCommand(cmd transport.Command, cfg config.AgentConfig) (string, string, string) {
+func executeCommand(cmd transport.Command, cfg config.AgentConfig, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) (string, string, string) {
 	switch strings.ToLower(cmd.CommandType) {
 	case "ping":
 		return "succeeded", "pong", ""
@@ -328,8 +331,381 @@ func executeCommand(cmd transport.Command, cfg config.AgentConfig) (string, stri
 			return "failed", "", fmt.Sprintf("shutdown failed: %v", err)
 		}
 		return "succeeded", "System shutdown initiated", ""
+	case "ai_task":
+		output, err := executeAITask(cmd.Payload, cfg, sysInfo, osInfo)
+		if err != nil {
+			return "failed", "", err.Error()
+		}
+		return "succeeded", output, ""
 	default:
 		return "failed", "", "unsupported command type"
+	}
+}
+
+func executeAITask(payload string, cfg config.AgentConfig, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) (string, error) {
+	task, err := ai.ParseTaskPayload(payload)
+	if err != nil {
+		return "", err
+	}
+
+	result := ai.ChildResult{
+		TaskID:      task.TaskID,
+		ChildIntent: task.ChildIntent,
+		State:       "completed",
+		Timestamp:   time.Now(),
+	}
+
+	if strings.EqualFold(strings.TrimSpace(task.Context), "personal_chat") {
+		if commandResponse, handled := tryHandlePersonalChatCommand(task.Instruction, cfg); handled {
+			result.Summary = "Agent response"
+			result.Details = commandResponse
+			if task.RequiresApproval {
+				result.State = "awaiting_approval"
+			}
+
+			body, err := json.Marshal(result)
+			if err != nil {
+				return "", fmt.Errorf("failed to serialize ai_task result: %w", err)
+			}
+
+			return string(body), nil
+		}
+
+		response, aiErr := generateAIChatResponse(task.Instruction, cfg, sysInfo, osInfo)
+		if aiErr != nil {
+			log.Printf("AI chat response failed, using fallback: %v", aiErr)
+			response = "I received your message: " + task.Instruction
+		}
+
+		result.Summary = "Agent response"
+		result.Details = response
+		if task.RequiresApproval {
+			result.State = "awaiting_approval"
+		}
+
+		body, err := json.Marshal(result)
+		if err != nil {
+			return "", fmt.Errorf("failed to serialize ai_task result: %w", err)
+		}
+
+		return string(body), nil
+	}
+
+	switch task.ChildIntent {
+	case ai.ChildWork:
+		result.Summary = "Child agent executed the requested work task"
+		result.Details = task.Instruction
+	case ai.ChildResolve:
+		result.Summary = "Child agent analyzed and resolved the requested issue"
+		result.Details = task.Instruction
+	case ai.ChildSuggest:
+		result.Summary = "Child agent generated a suggestion for the requested objective"
+		result.Details = task.Instruction
+	case ai.ChildIdentify:
+		result.Summary = "Child agent identified findings from the provided context"
+		result.Details = task.Instruction
+	case ai.ChildComplain:
+		result.State = "blocked"
+		result.Summary = "Child agent reported a blocker or concern"
+		result.Details = task.Instruction
+	default:
+		return "", fmt.Errorf("unsupported child_intent")
+	}
+
+	if task.RequiresApproval {
+		result.State = "awaiting_approval"
+	}
+
+	body, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize ai_task result: %w", err)
+	}
+
+	return string(body), nil
+}
+
+func tryHandlePersonalChatCommand(message string, cfg config.AgentConfig) (string, bool) {
+	trimmed := strings.TrimSpace(message)
+	if trimmed == "" {
+		return "", false
+	}
+
+	lower := strings.ToLower(trimmed)
+
+	if strings.HasPrefix(lower, "cmd:") {
+		cmd := strings.TrimSpace(trimmed[len("cmd:"):])
+		if cmd == "" {
+			return "Command execution failed: empty cmd command", true
+		}
+		return executeAndFormatCommand("cmd", cmd, cfg)
+	}
+
+	if strings.HasPrefix(lower, "powershell:") {
+		cmd := strings.TrimSpace(trimmed[len("powershell:"):])
+		if cmd == "" {
+			return "Command execution failed: empty powershell command", true
+		}
+		return executeAndFormatCommand("powershell", cmd, cfg)
+	}
+
+	if strings.HasPrefix(lower, "shell:") {
+		cmd := strings.TrimSpace(trimmed[len("shell:"):])
+		if cmd == "" {
+			return "Command execution failed: empty shell command", true
+		}
+		return executeAndFormatCommand("shell", cmd, cfg)
+	}
+
+	if strings.Contains(lower, "ping") {
+		target := detectPingTarget(trimmed)
+		if target != "" {
+			cmd := fmt.Sprintf("ping -n 4 %s", target)
+			return executeAndFormatCommand("cmd", cmd, cfg)
+		}
+	}
+
+	return "", false
+}
+
+func detectPingTarget(message string) string {
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "google dns") || strings.Contains(lower, "google public dns") {
+		return "8.8.8.8"
+	}
+
+	ipRegex := regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
+	if ip := ipRegex.FindString(message); ip != "" {
+		return ip
+	}
+
+	targetRegex := regexp.MustCompile(`(?i)\bping(?:\s+to)?\s+([a-z0-9.-]+)\b`)
+	matches := targetRegex.FindStringSubmatch(message)
+	if len(matches) == 2 {
+		candidate := strings.TrimSpace(matches[1])
+		if candidate != "" {
+			return candidate
+		}
+	}
+
+	return ""
+}
+
+func executeAndFormatCommand(commandType, command string, cfg config.AgentConfig) (string, bool) {
+	var (
+		output string
+		err    error
+	)
+
+	switch commandType {
+	case "cmd":
+		output, err = runCmdCommand(command, cfg.CommandTimeout)
+	case "powershell":
+		output, err = runPowerShellCommand(command, cfg.CommandTimeout)
+	case "shell":
+		output, err = runShellCommand(command, cfg.CommandTimeout)
+	default:
+		return "Unsupported command type", true
+	}
+
+	trimmedOutput := strings.TrimSpace(output)
+	if err != nil {
+		if trimmedOutput == "" {
+			trimmedOutput = err.Error()
+		}
+		return fmt.Sprintf("Command execution failed (%s):\n%s", command, trimmedOutput), true
+	}
+
+	if trimmedOutput == "" {
+		trimmedOutput = "(no output)"
+	}
+
+	return fmt.Sprintf("Command executed (%s):\n%s", command, trimmedOutput), true
+}
+
+func generateAIChatResponse(userMessage string, cfg config.AgentConfig, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) (string, error) {
+	provider := strings.ToLower(strings.TrimSpace(cfg.AIProvider))
+	if provider == "" {
+		provider = "openai"
+	}
+
+	if provider != "ollama" && strings.TrimSpace(cfg.AIAPIKey) == "" {
+		return "", fmt.Errorf("AGENT_AI_API_KEY is not configured")
+	}
+
+	type chatMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type chatRequest struct {
+		Model       string    `json:"model"`
+		Messages    []chatMsg `json:"messages"`
+		Temperature float64   `json:"temperature,omitempty"`
+	}
+	type chatResponse struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+	}
+
+	messages := []chatMsg{{Role: "system", Content: cfg.AISystemPrompt}}
+	if deviceContext := buildPersonalChatContext(sysInfo, osInfo); deviceContext != "" {
+		messages = append(messages, chatMsg{Role: "system", Content: deviceContext})
+	}
+	messages = append(messages, chatMsg{Role: "user", Content: userMessage})
+
+	reqPayload := chatRequest{
+		Model:       strings.TrimSpace(cfg.AIModel),
+		Messages:    messages,
+		Temperature: 0.4,
+	}
+	if reqPayload.Model == "" {
+		reqPayload.Model = "gpt-4o-mini"
+	}
+
+	requestURL, headers, err := buildAIRequestTargetAndHeaders(provider, cfg)
+	if err != nil {
+		return "", err
+	}
+
+	body, err := json.Marshal(reqPayload)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize AI request: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.CommandTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewBuffer(body))
+	if err != nil {
+		return "", fmt.Errorf("failed to create AI request: %w", err)
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{Timeout: cfg.RequestTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("AI request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var response chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("failed to parse AI response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if response.Error != nil && strings.TrimSpace(response.Error.Message) != "" {
+			return "", fmt.Errorf("AI API error: %s", response.Error.Message)
+		}
+		return "", fmt.Errorf("AI API HTTP %d", resp.StatusCode)
+	}
+
+	if len(response.Choices) == 0 {
+		return "", fmt.Errorf("AI response has no choices")
+	}
+
+	content := strings.TrimSpace(response.Choices[0].Message.Content)
+	if content == "" {
+		return "", fmt.Errorf("AI response content is empty")
+	}
+
+	return content, nil
+}
+
+func buildPersonalChatContext(sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) string {
+	if sysInfo == nil && osInfo == nil {
+		return ""
+	}
+
+	parts := []string{
+		"You are the AI assistant for THIS endpoint device. Use this local device profile when answering health/status questions.",
+	}
+
+	if sysInfo != nil {
+		parts = append(parts,
+			fmt.Sprintf("Agent ID: %s", strings.TrimSpace(sysInfo.AgentID)),
+			fmt.Sprintf("Hostname: %s", strings.TrimSpace(sysInfo.Hostname)),
+			fmt.Sprintf("Domain: %s", strings.TrimSpace(sysInfo.Domain)),
+			fmt.Sprintf("Private IP: %s", strings.TrimSpace(sysInfo.PrivateIP)),
+			fmt.Sprintf("Public IP: %s", strings.TrimSpace(sysInfo.PublicIP)),
+			fmt.Sprintf("Timezone: %s", strings.TrimSpace(sysInfo.Timezone)),
+			fmt.Sprintf("OS/Hardware: %s | %s | CPU: %s | RAM: %s", strings.TrimSpace(sysInfo.HardwareVendor), strings.TrimSpace(sysInfo.HardwareModel), strings.TrimSpace(sysInfo.Processor), strings.TrimSpace(sysInfo.Memory)),
+			fmt.Sprintf("System drive: %s", strings.TrimSpace(sysInfo.SystemDrive)),
+		)
+	}
+
+	if osInfo != nil {
+		parts = append(parts,
+			fmt.Sprintf("Windows Edition: %s", strings.TrimSpace(osInfo.OSEdition)),
+			fmt.Sprintf("Windows Version: %s", strings.TrimSpace(osInfo.OSVersion)),
+			fmt.Sprintf("Windows Build: %s", strings.TrimSpace(osInfo.OSBuild)),
+			fmt.Sprintf("Windows 11 Eligible: %s", strings.TrimSpace(osInfo.Windows11Eligible)),
+			fmt.Sprintf("Security: AV=%s | AntiSpyware=%s | Firewall=%s", strings.TrimSpace(osInfo.AntivirusName), strings.TrimSpace(osInfo.AntiSpywareName), strings.TrimSpace(osInfo.FirewallName)),
+		)
+	}
+
+	parts = append(parts, "If the user asks about device health/status, explicitly reference this endpoint profile (hostname, OS edition/version/build, CPU, RAM) in the answer. Mention limits only when necessary.")
+
+	return strings.Join(parts, "\n")
+}
+
+func buildAIRequestTargetAndHeaders(provider string, cfg config.AgentConfig) (string, map[string]string, error) {
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+
+	switch provider {
+	case "ollama":
+		endpoint := strings.TrimSpace(cfg.AIEndpoint)
+		if endpoint == "" {
+			endpoint = "http://localhost:11434/v1/chat/completions"
+		}
+		return endpoint, headers, nil
+
+	case "azure_openai", "azure":
+		endpoint := strings.TrimSpace(cfg.AIEndpoint)
+		deployment := strings.TrimSpace(cfg.AIDeployment)
+		if endpoint == "" || deployment == "" {
+			return "", nil, fmt.Errorf("AGENT_AI_ENDPOINT and AGENT_AI_DEPLOYMENT are required for Azure OpenAI")
+		}
+
+		base := strings.TrimRight(endpoint, "/")
+		target := fmt.Sprintf("%s/openai/deployments/%s/chat/completions", base, url.PathEscape(deployment))
+
+		parsed, err := url.Parse(target)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid Azure AI endpoint: %w", err)
+		}
+
+		query := parsed.Query()
+		if query.Get("api-version") == "" {
+			apiVersion := strings.TrimSpace(cfg.AIApiVersion)
+			if apiVersion == "" {
+				apiVersion = "2024-02-15-preview"
+			}
+			query.Set("api-version", apiVersion)
+		}
+		parsed.RawQuery = query.Encode()
+
+		headers["api-key"] = cfg.AIAPIKey
+		return parsed.String(), headers, nil
+
+	case "openai":
+		fallthrough
+	default:
+		endpoint := strings.TrimSpace(cfg.AIEndpoint)
+		if endpoint == "" {
+			return "", nil, fmt.Errorf("AGENT_AI_ENDPOINT is not configured")
+		}
+		headers["Authorization"] = "Bearer " + cfg.AIAPIKey
+		return endpoint, headers, nil
 	}
 }
 

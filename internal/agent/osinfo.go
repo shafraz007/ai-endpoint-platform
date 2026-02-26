@@ -10,16 +10,16 @@ import (
 
 // OSInfo represents operating system and security information
 type OSInfo struct {
-	OSEdition           string `json:"os_edition"`
-	OSVersion           string `json:"os_version"`
-	OSBuild             string `json:"os_build"`
-	Windows11Eligible   string `json:"windows_11_eligible"`
-	TLS12Compatible     bool   `json:"tls_12_compatible"`
-	DotNetVersion       string `json:"dotnet_version"`
-	OfficeVersion       string `json:"office_version"`
-	AntivirusName       string `json:"antivirus_name"`
-	AntiSpywareName     string `json:"antispyware_name"`
-	FirewallName        string `json:"firewall_name"`
+	OSEdition         string `json:"os_edition"`
+	OSVersion         string `json:"os_version"`
+	OSBuild           string `json:"os_build"`
+	Windows11Eligible string `json:"windows_11_eligible"`
+	TLS12Compatible   bool   `json:"tls_12_compatible"`
+	DotNetVersion     string `json:"dotnet_version"`
+	OfficeVersion     string `json:"office_version"`
+	AntivirusName     string `json:"antivirus_name"`
+	AntiSpywareName   string `json:"antispyware_name"`
+	FirewallName      string `json:"firewall_name"`
 }
 
 // CollectOSInfo gathers OS and security information

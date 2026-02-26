@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shafraz007/ai-endpoint-platform/internal/ai"
 	"github.com/shafraz007/ai-endpoint-platform/internal/auth"
 	"github.com/shafraz007/ai-endpoint-platform/internal/config"
 	"github.com/shafraz007/ai-endpoint-platform/internal/server"
@@ -59,16 +60,23 @@ func handleCommandCreate(w http.ResponseWriter, r *http.Request, cfg config.Serv
 	}
 
 	switch req.CommandType {
-	case "ping", "echo", "shell", "cmd", "powershell", "restart", "shutdown":
+	case "ping", "echo", "shell", "cmd", "powershell", "restart", "shutdown", "ai_task":
 		// ok
 	default:
 		http.Error(w, "Unsupported command_type", http.StatusBadRequest)
 		return
 	}
 
-	if (req.CommandType == "echo" || req.CommandType == "shell" || req.CommandType == "cmd" || req.CommandType == "powershell") && strings.TrimSpace(req.Payload) == "" {
+	if (req.CommandType == "echo" || req.CommandType == "shell" || req.CommandType == "cmd" || req.CommandType == "powershell" || req.CommandType == "ai_task") && strings.TrimSpace(req.Payload) == "" {
 		http.Error(w, "Missing payload", http.StatusBadRequest)
 		return
+	}
+
+	if req.CommandType == "ai_task" {
+		if _, err := ai.ParseTaskPayload(req.Payload); err != nil {
+			http.Error(w, "Invalid ai_task payload: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -294,14 +302,70 @@ func commandAckHandler(cfg config.ServerConfig) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
+		command, commandErr := server.GetCommandByID(ctx, req.CommandID, agentID)
+		if commandErr != nil {
+			log.Printf("GetCommandByID error: %v", commandErr)
+		}
+
 		if err := server.AckCommand(ctx, req.CommandID, agentID, status, req.Output, req.Error); err != nil {
 			log.Printf("AckCommand error: %v", err)
 			http.Error(w, "Failed to acknowledge command", http.StatusInternalServerError)
 			return
 		}
 
+		relayAgentReplyToChat(ctx, command, status, req.Output, req.Error)
+
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func relayAgentReplyToChat(ctx context.Context, command *server.AgentCommand, status, output, errMsg string) {
+	if command == nil {
+		return
+	}
+	if strings.ToLower(strings.TrimSpace(command.CommandType)) != "ai_task" {
+		return
+	}
+
+	task, err := ai.ParseTaskPayload(command.Payload)
+	if err != nil {
+		return
+	}
+
+	if !strings.HasPrefix(strings.TrimSpace(task.TaskID), "chatmsg-") {
+		return
+	}
+
+	sender := "agent:" + command.AgentID
+	if status == "failed" {
+		message := strings.TrimSpace(errMsg)
+		if message == "" {
+			message = "I could not process the message right now."
+		}
+		_, _ = server.CreateChatMessage(ctx, server.ChatScopeAgent, command.AgentID, sender, "Failed to respond: "+message)
+		return
+	}
+
+	chatText := strings.TrimSpace(output)
+	var result ai.ChildResult
+	if err := json.Unmarshal([]byte(output), &result); err == nil {
+		summary := strings.TrimSpace(result.Summary)
+		details := strings.TrimSpace(result.Details)
+		switch {
+		case summary != "" && details != "":
+			chatText = summary + "\n" + details
+		case summary != "":
+			chatText = summary
+		case details != "":
+			chatText = details
+		}
+	}
+
+	if chatText == "" {
+		chatText = "I processed your message."
+	}
+
+	_, _ = server.CreateChatMessage(ctx, server.ChatScopeAgent, command.AgentID, sender, chatText)
 }
 
 func requireAdmin(r *http.Request, secret string) (*auth.Claims, error) {

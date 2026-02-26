@@ -511,6 +511,76 @@
             max-height: 220px;
         }
 
+        .chat-panel {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+        }
+
+        .chat-list {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f8f9fa;
+            padding: 12px;
+            min-height: 220px;
+            max-height: 340px;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+
+        .chat-item {
+            border-bottom: 1px solid var(--line);
+            padding: 8px 0;
+        }
+
+        .chat-item:last-child {
+            border-bottom: none;
+        }
+
+        .chat-meta {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .chat-text {
+            color: var(--ink);
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .chat-compose {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-compose textarea {
+            flex: 1;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            min-height: 80px;
+            resize: vertical;
+            padding: 10px;
+            font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+        }
+
+        .chat-status {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .chat-status.ok {
+            color: #1c7c54;
+        }
+
+        .chat-status.error {
+            color: #b43c3c;
+        }
+
         @media (max-width: 900px) {
             .commands-grid {
                 grid-template-columns: 1fr;
@@ -559,6 +629,7 @@
             <button class="tab-button" onclick="switchTab('hardware', this)">🖥️ Hardware</button>
             <button class="tab-button" onclick="switchTab('disks', this)">💽 Disks</button>
             <button class="tab-button" onclick="switchTab('commands', this)">🧭 Commands</button>
+            <button class="tab-button" onclick="switchTab('chat', this)">💬 Personal Chat</button>
             <button class="tab-button" onclick="switchTab('metrics', this)">📈 Metrics</button>
             <button class="tab-button" onclick="switchTab('os-security', this)">🛡️ OS & Security</button>
             <div class="tabs-actions">
@@ -678,6 +749,22 @@
                         <div id="commands-empty" class="empty">No commands yet.</div>
                         <div id="commands-table" class="commands-table"></div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="chat" class="tab-content">
+            <div class="info-section">
+                <h2>Personal Chat ({{.Agent.Hostname}})</h2>
+                <div class="chat-panel">
+                    <div id="agent-chat-list" class="chat-list">
+                        <div class="empty">No messages yet.</div>
+                    </div>
+                    <div class="chat-compose">
+                        <textarea id="agent-chat-input" placeholder="Type a message for this agent thread..."></textarea>
+                        <button id="agent-chat-send" class="primary-btn" type="button">Send</button>
+                    </div>
+                    <div id="agent-chat-status" class="chat-status"></div>
                 </div>
             </div>
         </div>
@@ -877,11 +964,13 @@
         </div>
     </div>
 
+    <script id="disks-json" type="application/json">{{.DisksJSON}}</script>
+    <script id="drives-json" type="application/json">{{.DrivesJSON}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-        // Parse disk and drive JSON from template data (safe HTML/JS variables)
-        let disksData = {{.DisksJSON}};
-        let drivesData = {{.DrivesJSON}};
+        // Parse disk and drive JSON from script tags
+        const disksData = JSON.parse(document.getElementById('disks-json').textContent || '[]');
+        const drivesData = JSON.parse(document.getElementById('drives-json').textContent || '[]');
         const agentId = "{{.Agent.AgentID}}";
         
         function switchTab(tabName, btn) {
@@ -913,6 +1002,13 @@
             statusEl.className = 'command-status' + (type ? ' ' + type : '');
         }
 
+        function setAgentChatStatus(message, type) {
+            const statusEl = document.getElementById('agent-chat-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'chat-status' + (type ? ' ' + type : '');
+        }
+
         async function logoutAdmin() {
             await fetch('/admin/logout', { method: 'POST' });
         }
@@ -922,6 +1018,95 @@
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return 'n/a';
             return date.toLocaleString();
+        }
+
+        function renderAgentChat(messages) {
+            const listEl = document.getElementById('agent-chat-list');
+            if (!listEl) return;
+
+            if (!messages || messages.length === 0) {
+                listEl.innerHTML = '<div class="empty">No messages yet.</div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+            messages.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'chat-item';
+
+                const meta = document.createElement('div');
+                meta.className = 'chat-meta';
+                meta.textContent = item.sender + ' • ' + formatTimestamp(item.created_at);
+
+                const text = document.createElement('div');
+                text.className = 'chat-text';
+                text.textContent = item.message;
+
+                row.appendChild(meta);
+                row.appendChild(text);
+                listEl.appendChild(row);
+            });
+
+            listEl.scrollTop = listEl.scrollHeight;
+        }
+
+        async function loadAgentChat() {
+            try {
+                const response = await fetch('/api/chat/messages?scope=agent&agent_id=' + encodeURIComponent(agentId) + '&limit=100', {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Agent chat load failed: ' + response.status);
+                }
+
+                const data = await response.json();
+                renderAgentChat(data);
+            } catch (err) {
+                setAgentChatStatus(err.message || 'Failed to load personal chat.', 'error');
+            }
+        }
+
+        async function sendAgentChatMessage() {
+            const input = document.getElementById('agent-chat-input');
+            if (!input) return;
+            const message = input.value.trim();
+            if (!message) {
+                setAgentChatStatus('Message is required.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/chat/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        scope: 'agent',
+                        agent_id: agentId,
+                        message: message,
+                    }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Agent chat send failed: ' + response.status);
+                }
+
+                input.value = '';
+                setAgentChatStatus('Message sent.', 'ok');
+                await loadAgentChat();
+            } catch (err) {
+                setAgentChatStatus(err.message || 'Failed to send personal chat message.', 'error');
+            }
         }
 
         function renderCommands(commands) {
@@ -1205,6 +1390,8 @@
             const refreshButton = document.getElementById('refresh-commands');
             const sendButton = document.getElementById('send-command');
             const typeInput = document.getElementById('command-type');
+            const agentChatSendButton = document.getElementById('agent-chat-send');
+            const agentChatInput = document.getElementById('agent-chat-input');
             const metricsRange = document.getElementById('metrics-range');
             const cpuCanvas = document.getElementById('cpu-chart');
             const memoryCanvas = document.getElementById('memory-chart');
@@ -1287,6 +1474,17 @@
                 typeInput.addEventListener('change', togglePayloadVisibility);
                 togglePayloadVisibility();
             }
+            if (agentChatSendButton) {
+                agentChatSendButton.addEventListener('click', sendAgentChatMessage);
+            }
+            if (agentChatInput) {
+                agentChatInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        sendAgentChatMessage();
+                    }
+                });
+            }
 
             if (cpuCanvas && memoryCanvas && networkCanvas) {
                 const charts = {
@@ -1305,6 +1503,8 @@
             }
 
             loadCommands();
+            loadAgentChat();
+            setInterval(loadAgentChat, 5000);
         });
     </script>
 </body>

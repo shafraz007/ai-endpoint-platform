@@ -185,3 +185,42 @@ func ListCommandsByAgent(ctx context.Context, agentID string, limit int) ([]Agen
 
 	return commands, nil
 }
+
+func GetCommandByID(ctx context.Context, commandID int64, agentID string) (*AgentCommand, error) {
+	if commandID <= 0 {
+		return nil, fmt.Errorf("commandID is required")
+	}
+	if agentID == "" {
+		return nil, fmt.Errorf("agentID is required")
+	}
+
+	query := `
+	SELECT id, agent_id, command_type, payload, status, created_at, dispatched_at, completed_at,
+		COALESCE(output, ''), COALESCE(error, '')
+	FROM agent_commands
+	WHERE id = $1 AND agent_id = $2
+	LIMIT 1
+	`
+
+	var cmd AgentCommand
+	err := DB.QueryRow(ctx, query, commandID, agentID).Scan(
+		&cmd.ID,
+		&cmd.AgentID,
+		&cmd.CommandType,
+		&cmd.Payload,
+		&cmd.Status,
+		&cmd.CreatedAt,
+		&cmd.DispatchedAt,
+		&cmd.CompletedAt,
+		&cmd.Output,
+		&cmd.Error,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("command not found")
+		}
+		return nil, fmt.Errorf("failed to fetch command: %w", err)
+	}
+
+	return &cmd, nil
+}
