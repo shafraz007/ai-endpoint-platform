@@ -27,6 +27,7 @@ var loginTemplate *template.Template
 var changePasswordTemplate *template.Template
 var sessionTimeoutTemplate *template.Template
 var settingsTemplate *template.Template
+var reportsTemplate *template.Template
 
 func init() {
 	var err error
@@ -58,6 +59,11 @@ func init() {
 	settingsTemplate, err = template.ParseFiles("cmd/server/templates/settings.html")
 	if err != nil {
 		log.Printf("Warning: Failed to parse settings template: %v", err)
+	}
+
+	reportsTemplate, err = template.ParseFiles("cmd/server/templates/reports.html")
+	if err != nil {
+		log.Printf("Warning: Failed to parse reports template: %v", err)
 	}
 }
 
@@ -124,11 +130,22 @@ func heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 		hb.AntiSpywareName,
 		hb.FirewallName,
 		hb.TLS12Compatible,
+		hb.RebootRequired,
+		hb.PatchScanAt,
 	)
 	if err != nil {
 		log.Printf("Database error: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+	if err := server.UpsertAgentPatchInventory(ctx, hb.AgentID, hb.PendingUpdates); err != nil {
+		log.Printf("Patch inventory upsert warning for agent %s: %v", hb.AgentID, err)
+	}
+	if err := server.EvaluateHeartbeatIssues(ctx, hb); err != nil {
+		log.Printf("Issue detection warning for agent %s: %v", hb.AgentID, err)
 	}
 
 	log.Printf("Heartbeat received from agent: %s (%s)", hb.AgentID, hb.Hostname)
@@ -182,6 +199,60 @@ func agentsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		http.Error(w, "Template not loaded", http.StatusInternalServerError)
+	}
+}
+
+func apiAgentsHandler(cfg config.ServerConfig) http.HandlerFunc {
+	type apiAgent struct {
+		ID        string     `json:"id"`
+		Hostname  string     `json:"hostname"`
+		Status    string     `json:"status"`
+		LastSeen  time.Time  `json:"last_seen"`
+		UpdatedAt time.Time  `json:"updated_at"`
+		Domain    string     `json:"domain,omitempty"`
+		PrivateIP string     `json:"private_ip,omitempty"`
+		PublicIP  string     `json:"public_ip,omitempty"`
+		LastLogin *time.Time `json:"last_login,omitempty"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if _, _, err := authorizeAdminRequest(w, r, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+
+		agents, err := server.GetAllAgents(ctx)
+		if err != nil {
+			log.Printf("apiAgentsHandler: failed to fetch agents: %v", err)
+			http.Error(w, "Failed to fetch agents", http.StatusInternalServerError)
+			return
+		}
+
+		resp := make([]apiAgent, 0, len(agents))
+		for _, item := range agents {
+			resp = append(resp, apiAgent{
+				ID:        item.AgentID,
+				Hostname:  item.Hostname,
+				Status:    item.Status,
+				LastSeen:  item.LastSeen,
+				UpdatedAt: item.UpdatedAt,
+				Domain:    item.Domain,
+				PrivateIP: item.PrivateIP,
+				PublicIP:  item.PublicIP,
+				LastLogin: item.LastLogin,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 
@@ -481,6 +552,8 @@ func main() {
 	// Metrics endpoints
 	mux.HandleFunc("/api/metrics", metricsRouter(cfg))
 	mux.HandleFunc("/api/metrics/stream", metricsStreamHandler(cfg))
+	mux.HandleFunc("/api/agents", apiAgentsHandler(cfg))
+	mux.HandleFunc("/api/agents/", agentPatchUpdatesRouter(cfg))
 
 	// Governance endpoints (admin only)
 	mux.HandleFunc("/api/categories", categoriesHandler(cfg))
@@ -494,6 +567,21 @@ func main() {
 	mux.HandleFunc("/api/groups", groupsHandler(cfg))
 	mux.HandleFunc("/api/groups/", groupRouter(cfg))
 	mux.HandleFunc("/api/chat/messages", chatMessagesHandler(cfg))
+	mux.HandleFunc("/api/chat/stream", chatStreamHandler(cfg))
+	mux.HandleFunc("/api/chat/sessions", chatSessionsHandler(cfg))
+	mux.HandleFunc("/api/chat/tools", chatToolsHandler(cfg))
+	mux.HandleFunc("/api/schedules", schedulesHandler(cfg))
+	mux.HandleFunc("/api/schedules/", scheduleHandler(cfg))
+	mux.HandleFunc("/api/os-patch/policy", osPatchPolicyHandler(cfg))
+	mux.HandleFunc("/api/os-patch/policy/reset", osPatchPolicyResetHandler(cfg))
+	mux.HandleFunc("/api/os-patch/policy/audit", osPatchPolicyAuditHandler(cfg))
+	mux.HandleFunc("/api/os-patch/updates", osPatchUpdatesHandler(cfg))
+	mux.HandleFunc("/api/os-patch/updates/actions", osPatchUpdatesActionHandler(cfg))
+	mux.HandleFunc("/api/reports/executions", scheduleExecutionReportsHandler(cfg))
+	mux.HandleFunc("/api/issues", issuesHandler(cfg))
+	mux.HandleFunc("/api/issues/", issueRouter(cfg))
+	mux.HandleFunc("/api/threshold-profiles", thresholdProfilesHandler(cfg))
+	mux.HandleFunc("/api/threshold-profiles/active", activeThresholdProfileHandler(cfg))
 
 	// Admin session endpoints
 	mux.HandleFunc("/admin/login", adminLoginHandler(cfg))
@@ -515,6 +603,7 @@ func main() {
 
 	// Governance settings page
 	mux.HandleFunc("/settings", governancePageHandler(cfg))
+	mux.HandleFunc("/reports", reportsPageHandler(cfg))
 
 	// Agent detail handler (must have trailing slash to match /agents/...)
 	mux.HandleFunc("/agents/", func(w http.ResponseWriter, r *http.Request) {
@@ -591,6 +680,25 @@ func main() {
 			}
 			if count > 0 {
 				log.Printf("Marked %d agent(s) offline (last_seen before %s)", count, cutoff.Format(time.RFC3339))
+			}
+		}
+	}()
+
+	// Background scheduler dispatcher loop
+	go func() {
+		ticker := time.NewTicker(cfg.SchedulerDispatchInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now().UTC()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			result, err := server.DispatchDueSchedules(ctx, now, cfg.SchedulerBatchSize)
+			cancel()
+			if err != nil {
+				log.Printf("Error dispatching schedules: %v", err)
+				continue
+			}
+			if result.SchedulesProcessed > 0 || result.CommandsCreated > 0 {
+				log.Printf("Dispatched schedules: processed=%d commands_created=%d", result.SchedulesProcessed, result.CommandsCreated)
 			}
 		}
 	}()

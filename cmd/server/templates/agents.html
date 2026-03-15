@@ -19,7 +19,8 @@
         }
 
         .container {
-            max-width: 1400px;
+            width: 100%;
+            max-width: none;
             margin: 0 auto;
         }
 
@@ -172,7 +173,8 @@
             background: white;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
+            padding: 0;
+            overflow: hidden;
         }
 
         .chat-title {
@@ -181,15 +183,118 @@
             font-size: 20px;
         }
 
-        .chat-list {
+        .chatgpt-shell {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 640px;
+        }
+
+        .chatgpt-sidebar {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 14px;
+            border-right: 1px solid #1e293b;
+        }
+
+        .chatgpt-new-btn {
+            width: 100%;
+            border: 1px solid #334155;
+            background: #111827;
+            color: #f8fafc;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .chatgpt-session-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 560px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        .chatgpt-session-item {
+            border: 1px solid transparent;
+            background: #1e293b;
+            color: #cbd5e1;
+            border-radius: 8px;
+            padding: 9px 10px;
+            font-size: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .chatgpt-session-item.active {
+            background: #334155;
+            border-color: #64748b;
+            color: #fff;
+        }
+
+        .chatgpt-main {
+            display: flex;
+            flex-direction: column;
+            background: #f8fafc;
+        }
+
+        .chatgpt-top {
+            padding: 16px 18px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #fff;
+        }
+
+        .chatgpt-subtitle {
+            color: #64748b;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        .chat-help {
+            margin-bottom: 12px;
+            padding: 10px 12px;
             border: 1px solid #e6eaed;
             border-radius: 8px;
             background: #f8f9fa;
-            padding: 12px;
-            min-height: 220px;
-            max-height: 320px;
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .chat-help strong {
+            color: #374151;
+        }
+
+        .chat-help ul {
+            margin: 6px 0 0 18px;
+            padding: 0;
+        }
+
+        .chat-help li {
+            margin: 2px 0;
+        }
+
+        .chat-session-row {
+            display: none;
+        }
+
+        .chat-session-select {
+            display: none;
+        }
+
+        .chat-list {
+            border: none;
+            border-radius: 0;
+            background: #f8fafc;
+            padding: 16px;
+            min-height: 380px;
+            max-height: none;
             overflow-y: auto;
-            margin-bottom: 12px;
+            margin-bottom: 0;
+            flex: 1;
         }
 
         .chat-empty {
@@ -198,12 +303,50 @@
         }
 
         .chat-item {
-            border-bottom: 1px solid #e6eaed;
-            padding: 8px 0;
+            display: flex;
+            margin: 10px 0;
+            border-bottom: none;
+            padding: 0;
         }
 
-        .chat-item:last-child {
-            border-bottom: none;
+        .chat-item.mine {
+            justify-content: flex-end;
+        }
+
+        .chat-item.theirs {
+            justify-content: flex-start;
+        }
+
+        .chat-item.pending {
+            opacity: 0.8;
+        }
+
+        .chat-item.failed {
+            opacity: 0.95;
+        }
+
+        .chat-bubble {
+            max-width: min(75%, 760px);
+            border-radius: 14px;
+            padding: 9px 12px;
+            border: 1px solid #e6eaed;
+            background: #eef2f5;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        }
+
+        .chat-item.mine .chat-bubble {
+            background: #667eea;
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .chat-item.mine .chat-meta,
+        .chat-item.mine .chat-delivery {
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .chat-item.failed .chat-bubble {
+            border-color: #b91c1c;
         }
 
         .chat-meta {
@@ -219,9 +362,88 @@
             word-break: break-word;
         }
 
+        .chat-delivery {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .chat-live-indicator {
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .chat-live-indicator.ok {
+            color: #166534;
+        }
+
+        .chat-live-indicator.warn {
+            color: #8a5a12;
+        }
+
+        .chat-typing {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+            min-height: 16px;
+        }
+
+        .chat-jump-row {
+            display: none;
+        }
+
+        .chat-new-link {
+            display: none;
+            font-size: 12px;
+            color: #667eea;
+            text-decoration: underline;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .chat-new-link.show {
+            display: inline-block;
+        }
+
+        .chat-bottom-btn {
+            margin-left: auto;
+        }
+
+        .chat-command-list {
+            display: grid;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .chat-command-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .chat-copy-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 4px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
         .chat-compose {
             display: flex;
             gap: 10px;
+            border-top: 1px solid #e2e8f0;
+            background: #fff;
+            padding: 12px 14px 14px;
         }
 
         .chat-compose textarea {
@@ -237,7 +459,9 @@
         .chat-status {
             font-size: 13px;
             color: #666;
-            margin-top: 8px;
+            margin: 0;
+            padding: 0 14px 12px;
+            background: #fff;
         }
 
         .chat-status.error {
@@ -245,6 +469,210 @@
         }
 
         .chat-status.ok {
+            color: #166534;
+        }
+
+        .list-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .list-controls-left,
+        .list-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .limit-select {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            background: #fff;
+        }
+
+        .pager-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .pager-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pager-info {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .issues-panel {
+            margin-top: 24px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .issues-title {
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+        .issues-filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .issues-filters input,
+        .issues-filters select {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        .issues-list {
+            border: 1px solid #e6eaed;
+            border-radius: 8px;
+            background: #f8f9fa;
+            padding: 12px;
+            min-height: 220px;
+            max-height: 420px;
+            overflow-y: auto;
+            display: grid;
+            gap: 10px;
+        }
+
+        .issue-card {
+            border: 1px solid #e6eaed;
+            border-radius: 8px;
+            padding: 10px;
+            background: #fff;
+        }
+
+        .issue-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+
+        .issue-title {
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .issue-meta {
+            color: #777;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .issue-desc {
+            color: #333;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-bottom: 8px;
+        }
+
+        .issue-actions {
+            display: grid;
+            gap: 8px;
+        }
+
+        .issue-action-row {
+            border: 1px solid #e6eaed;
+            border-radius: 8px;
+            padding: 8px;
+            background: #f8fafc;
+        }
+
+        .issue-action-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+
+        .issue-action-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .issue-action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .small-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .severity-pill,
+        .status-pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .severity-critical,
+        .severity-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .severity-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .severity-low {
+            background: #dbeafe;
+            color: #1e3a8a;
+        }
+
+        .status-active {
+            background: #fff7ed;
+            color: #9a3412;
+        }
+
+        .status-resolved {
+            background: #dcfce7;
             color: #166534;
         }
 
@@ -277,6 +705,7 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            position: relative;
         }
 
         .ghost-btn {
@@ -289,6 +718,156 @@
             font-size: 13px;
             font-weight: 600;
         }
+
+        .notif-btn {
+            position: relative;
+            min-width: 44px;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .notif-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5px;
+        }
+
+        .notif-badge.show {
+            display: inline-flex;
+        }
+
+        .notif-popup {
+            position: absolute;
+            top: 56px;
+            right: 0;
+            width: min(460px, 92vw);
+            background: #fff;
+            border: 1px solid #e6eaf2;
+            border-radius: 12px;
+            box-shadow: 0 16px 30px rgba(17, 24, 39, 0.18);
+            padding: 10px;
+            z-index: 40;
+            display: none;
+        }
+
+        .notif-popup.show {
+            display: block;
+        }
+
+        .notif-popup-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 6px 10px 6px;
+            border-bottom: 1px solid #eef2f7;
+            margin-bottom: 8px;
+        }
+
+        .notif-popup-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .notif-popup-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .notif-link-btn {
+            background: transparent;
+            border: none;
+            color: #4f46e5;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+        }
+
+        .notif-link-btn:hover {
+            background: #eef2ff;
+        }
+
+        .notif-popup-list {
+            max-height: 380px;
+            overflow: auto;
+            display: grid;
+            gap: 8px;
+            padding-right: 2px;
+        }
+
+        .notif-item {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 8px 10px;
+            background: #fafbff;
+        }
+
+        .notif-item:hover {
+            border-color: #c7d2fe;
+            background: #f3f5ff;
+        }
+
+        .notif-item-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .notif-item-type {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #4f46e5;
+            letter-spacing: 0.35px;
+        }
+
+        .notif-item-time {
+            font-size: 11px;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+
+        .notif-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 3px;
+        }
+
+        .notif-item-meta {
+            font-size: 12px;
+            color: #4b5563;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .notif-popup-empty {
+            color: #6b7280;
+            font-size: 13px;
+            padding: 12px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -300,7 +879,21 @@
                     <p class="header-info">Agent Management Dashboard</p>
                 </div>
                 <div class="header-actions">
+                    <button class="ghost-btn notif-btn" id="global-notif-button" type="button" title="Global notifications">🔔<span id="global-notif-count" class="notif-badge">0</span></button>
+                    <div id="global-notif-popup" class="notif-popup" role="dialog" aria-label="Global notifications" aria-modal="false">
+                        <div class="notif-popup-head">
+                            <div class="notif-popup-title">Notifications</div>
+                            <div class="notif-popup-actions">
+                                <button id="global-notif-mark-read" class="notif-link-btn" type="button">Mark all read</button>
+                                <button id="global-notif-close" class="notif-link-btn" type="button">Close</button>
+                            </div>
+                        </div>
+                        <div id="global-notif-list" class="notif-popup-list">
+                            <div class="notif-popup-empty">No new notifications.</div>
+                        </div>
+                    </div>
                     <a class="ghost-btn" href="/settings">Governance</a>
+                    <a class="ghost-btn" href="/reports">Reports</a>
                     <button class="ghost-btn" id="logout-button" type="button">Logout</button>
                 </div>
             </div>
@@ -324,6 +917,22 @@
 
         <div class="table-wrapper">
             {{if .Agents}}
+            <div class="list-controls" style="padding: 14px 15px 0 15px;">
+                <div class="list-controls-left">
+                    <label for="agents-limit" class="pager-info">Rows per page</label>
+                    <select id="agents-limit" class="limit-select">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="list-controls-right">
+                    <button id="agents-prev" class="pager-btn" type="button">Prev</button>
+                    <span id="agents-page-info" class="pager-info">Page 1</span>
+                    <button id="agents-next" class="pager-btn" type="button">Next</button>
+                </div>
+            </div>
             <table>
                 <thead>
                     <tr>
@@ -338,7 +947,7 @@
                         <th>Last Seen</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="agents-table-body">
                     {{range .Agents}}
                     <tr onclick="window.location.href='/agents/{{.AgentID}}';" style="cursor: pointer;">
                         <td><span class="hostname">{{.Hostname}}</span></td>
@@ -363,16 +972,78 @@
             {{end}}
         </div>
 
-        <div class="chat-panel">
-            <h2 class="chat-title">💬 Global Chat</h2>
-            <div id="global-chat-list" class="chat-list">
-                <div class="chat-empty">No messages yet.</div>
+        <div class="chat-panel chatgpt-shell">
+            <aside class="chatgpt-sidebar">
+                <button id="global-chat-new-session" class="chatgpt-new-btn" type="button">+ New chat</button>
+                <div id="global-chat-session-list" class="chatgpt-session-list"></div>
+            </aside>
+            <section class="chatgpt-main">
+                <div class="chatgpt-top">
+                    <h2 class="chat-title">Global AI Chat</h2>
+                    <div class="chatgpt-subtitle">Plain AI mode • session-based context</div>
+                    <div id="global-chat-live-indicator" class="chat-live-indicator">Connecting live chat…</div>
+                </div>
+                <div id="global-chat-list" class="chat-list">
+                    <div class="chat-empty">No messages yet.</div>
+                </div>
+                <div class="chat-jump-row">
+                    <button id="global-chat-new-link" type="button" class="chat-new-link">New messages</button>
+                    <button id="global-chat-bottom-btn" type="button" class="chat-copy-btn chat-bottom-btn">Scroll to bottom</button>
+                </div>
+                <div class="chat-compose">
+                    <textarea id="global-chat-input" placeholder="Message AI..."></textarea>
+                    <button id="global-chat-send" class="refresh-btn" type="button">Send</button>
+                </div>
+                <div id="global-chat-typing" class="chat-typing"></div>
+                <div id="global-chat-status" class="chat-status"></div>
+            </section>
+        </div>
+
+        <div class="issues-panel">
+            <h2 class="issues-title">🚨 Global Issues and Alerts</h2>
+            <div class="issues-filters">
+                <select id="issues-filter-status">
+                    <option value="active" selected>Status: Active</option>
+                    <option value="resolved">Status: Resolved</option>
+                    <option value="">Status: All</option>
+                </select>
+                <select id="issues-filter-severity">
+                    <option value="">Severity: All</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+                <select id="issues-filter-category">
+                    <option value="">Category: All</option>
+                    <option value="patch">Patch</option>
+                    <option value="security">Security</option>
+                    <option value="performance">Performance</option>
+                    <option value="network">Network</option>
+                </select>
+                <input id="issues-filter-agent" type="text" placeholder="Filter by Agent ID">
+                <button id="issues-refresh" class="refresh-btn" type="button">Refresh Issues</button>
             </div>
-            <div class="chat-compose">
-                <textarea id="global-chat-input" placeholder="Type a message for everyone..."></textarea>
-                <button id="global-chat-send" class="refresh-btn" type="button">Send</button>
+            <div class="list-controls">
+                <div class="list-controls-left">
+                    <label for="issues-limit" class="pager-info">Issues per page</label>
+                    <select id="issues-limit" class="limit-select">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div class="list-controls-right">
+                    <button id="issues-prev" class="pager-btn" type="button">Prev</button>
+                    <span id="issues-page-info" class="pager-info">Page 1</span>
+                    <button id="issues-next" class="pager-btn" type="button">Next</button>
+                </div>
             </div>
-            <div id="global-chat-status" class="chat-status"></div>
+            <div id="global-issues-list" class="issues-list">
+                <div class="chat-empty">No issues loaded.</div>
+            </div>
+            <div id="global-issues-status" class="chat-status"></div>
         </div>
 
         <div class="footer">
@@ -380,6 +1051,26 @@
         </div>
     </div>
     <script>
+        const globalLastSeenStorageKey = 'globalChatLastSeenMessageId';
+        const globalIssueLastSeenStorageKey = 'globalIssuesLastSeenUpdatedAtMs';
+        let latestGlobalMessages = [];
+        let optimisticGlobalMessages = [];
+        let globalPendingReplyAfterMessageID = 0;
+        let globalChatEventSource = null;
+        let globalChatInitialScrollDone = false;
+        let globalUnseenMessageCount = 0;
+        let globalFirstUnseenMessageID = 0;
+        let globalChatSessions = [];
+        let activeGlobalSessionID = 0;
+        let latestGlobalIssues = [];
+        let globalChatSendInFlight = false;
+
+        const pagination = {
+            agents: { page: 1, limit: 20, total: 0 },
+            globalChat: { page: 1, limit: 25, total: 0 },
+            issues: { page: 1, limit: 10, total: 0 },
+        };
+
         function formatTimestamp(value) {
             if (!value) return 'n/a';
             const date = new Date(value);
@@ -394,19 +1085,438 @@
             statusEl.className = 'chat-status' + (type ? ' ' + type : '');
         }
 
+        function setGlobalChatLiveIndicator(message, type) {
+            const indicator = document.getElementById('global-chat-live-indicator');
+            if (!indicator) return;
+            indicator.textContent = message || '';
+            indicator.className = 'chat-live-indicator' + (type ? ' ' + type : '');
+        }
+
+        function setGlobalTypingIndicator(visible, message) {
+            const typingEl = document.getElementById('global-chat-typing');
+            if (!typingEl) return;
+            typingEl.textContent = visible ? (message || 'Agent is thinking…') : '';
+        }
+
+        function getActiveGlobalSessionID() {
+            const value = Number(activeGlobalSessionID);
+            return Number.isFinite(value) && value > 0 ? value : 0;
+        }
+
+        function formatGlobalSessionLabel(item) {
+            const id = Number(item && item.id) || 0;
+            const title = String(item && item.title || ('Session #' + id)).trim();
+            const lastAt = item && (item.last_message_at || item.updated_at || item.created_at);
+            const when = lastAt ? formatTimestamp(lastAt) : 'n/a';
+            return title + ' • ' + when;
+        }
+
+        function renderGlobalChatSessionOptions() {
+            const list = document.getElementById('global-chat-session-list');
+            if (!list) return;
+
+            const sessions = Array.isArray(globalChatSessions) ? globalChatSessions : [];
+            list.innerHTML = '';
+
+            if (sessions.length === 0) {
+                list.innerHTML = '<div class="chat-empty">No chats yet.</div>';
+                activeGlobalSessionID = 0;
+                return;
+            }
+
+            sessions.forEach((item) => {
+                const id = Number(item && item.id) || 0;
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'chatgpt-session-item' + (id === getActiveGlobalSessionID() ? ' active' : '');
+                button.textContent = formatGlobalSessionLabel(item);
+                button.addEventListener('click', () => {
+                    switchGlobalChatSession(id);
+                });
+                list.appendChild(button);
+            });
+        }
+
+        async function switchGlobalChatSession(sessionID) {
+            const selectedID = Number(sessionID) || 0;
+            if (selectedID <= 0 || selectedID === getActiveGlobalSessionID()) {
+                renderGlobalChatSessionOptions();
+                return;
+            }
+
+            activeGlobalSessionID = selectedID;
+            latestGlobalMessages = [];
+            optimisticGlobalMessages = [];
+            globalChatInitialScrollDone = false;
+            globalPendingReplyAfterMessageID = 0;
+            clearGlobalUnreadJumpState();
+            setGlobalTypingIndicator(false);
+            if (globalChatEventSource) {
+                globalChatEventSource.close();
+                globalChatEventSource = null;
+            }
+
+            renderGlobalChatSessionOptions();
+            await loadGlobalChat();
+            startGlobalChatStream();
+        }
+
+        async function loadGlobalChatSessions(preferredSessionID) {
+            try {
+                const response = await fetch('/api/chat/sessions?limit=100', {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Global chat sessions load failed: ' + response.status);
+                }
+
+                const sessions = await response.json();
+                globalChatSessions = Array.isArray(sessions) ? sessions : [];
+
+                if (Number(preferredSessionID) > 0 && globalChatSessions.some((item) => Number(item.id) === Number(preferredSessionID))) {
+                    activeGlobalSessionID = Number(preferredSessionID);
+                } else if (globalChatSessions.length > 0 && getActiveGlobalSessionID() <= 0) {
+                    activeGlobalSessionID = Number(globalChatSessions[0].id) || 0;
+                }
+
+                renderGlobalChatSessionOptions();
+            } catch (err) {
+                setGlobalChatStatus(err.message || 'Failed to load global chat sessions.', 'error');
+            }
+        }
+
+        async function createNewGlobalChatSession() {
+            try {
+                const response = await fetch('/api/chat/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ title: 'New Chat' }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Create session failed: ' + response.status);
+                }
+
+                const created = await response.json();
+                const newID = Number(created && created.id) || 0;
+
+                await loadGlobalChatSessions(newID);
+                latestGlobalMessages = [];
+                optimisticGlobalMessages = [];
+                globalChatInitialScrollDone = false;
+                clearGlobalUnreadJumpState();
+                if (globalChatEventSource) {
+                    globalChatEventSource.close();
+                    globalChatEventSource = null;
+                }
+                await loadGlobalChat();
+                startGlobalChatStream();
+                setGlobalChatStatus('New chat session created.', 'ok');
+            } catch (err) {
+                setGlobalChatStatus(err.message || 'Failed to create new chat session.', 'error');
+            }
+        }
+
+        function setGlobalIssuesStatus(message, type) {
+            const statusEl = document.getElementById('global-issues-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'chat-status' + (type ? ' ' + type : '');
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function paginateArray(items, page, limit) {
+            const safeItems = Array.isArray(items) ? items : [];
+            const safeLimit = Math.max(1, Number(limit) || 1);
+            const total = safeItems.length;
+            const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+            const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+            const start = (currentPage - 1) * safeLimit;
+            const paged = safeItems.slice(start, start + safeLimit);
+            return { paged, total, totalPages, currentPage };
+        }
+
+        function updatePagerControls(prefix, state) {
+            const info = document.getElementById(prefix + '-page-info');
+            const prev = document.getElementById(prefix + '-prev');
+            const next = document.getElementById(prefix + '-next');
+            if (info) {
+                info.textContent = `Page ${state.page} / ${state.totalPages} • ${state.total} item(s)`;
+            }
+            if (prev) prev.disabled = state.page <= 1;
+            if (next) next.disabled = state.page >= state.totalPages;
+        }
+
+        function renderAgentsTablePage() {
+            const tbody = document.getElementById('agents-table-body');
+            if (!tbody) return;
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const result = paginateArray(rows, pagination.agents.page, pagination.agents.limit);
+            pagination.agents.page = result.currentPage;
+            pagination.agents.total = result.total;
+            pagination.agents.totalPages = result.totalPages;
+
+            rows.forEach((row, idx) => {
+                row.style.display = (idx >= (result.currentPage - 1) * pagination.agents.limit && idx < (result.currentPage * pagination.agents.limit)) ? '' : 'none';
+            });
+
+            updatePagerControls('agents', pagination.agents);
+        }
+
+        function extractExplicitCommandsFromMessage(message) {
+            if (!message) return [];
+
+            const commands = [];
+            const seen = new Set();
+
+            function addCommand(candidate) {
+                if (!candidate) return;
+                const cleaned = String(candidate).trim().replace(/^`+|`+$/g, '').trim();
+                const match = cleaned.match(/^(cmd|powershell|shell)\s*:\s*(.+)$/i);
+                if (!match) return;
+
+                const commandBody = (match[2] || '').trim();
+                if (!commandBody) return;
+
+                const normalized = `${String(match[1]).toLowerCase()}: ${commandBody}`;
+                if (seen.has(normalized)) return;
+                seen.add(normalized);
+                commands.push(normalized);
+            }
+
+            String(message).split(/\r?\n/).forEach((line) => addCommand(line));
+
+            const inlineCodeRegex = /`((?:cmd|powershell|shell)\s*:[^`]+)`/ig;
+            let codeMatch;
+            while ((codeMatch = inlineCodeRegex.exec(String(message))) !== null) {
+                addCommand(codeMatch[1]);
+            }
+
+            return commands;
+        }
+
+        function copyCommandToGlobalInput(commandText) {
+            const input = document.getElementById('global-chat-input');
+            if (!input) return;
+
+            input.value = commandText;
+            input.focus();
+            if (typeof input.setSelectionRange === 'function') {
+                input.setSelectionRange(input.value.length, input.value.length);
+            }
+
+            setGlobalChatStatus('Command copied to input box. Review and send when ready.', 'ok');
+        }
+
+        function normalizeChatID(value) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : 0;
+        }
+
+        function sortChatMessages(messages) {
+            return (Array.isArray(messages) ? messages.slice() : []).sort((a, b) => {
+                const aID = normalizeChatID(a && a.id);
+                const bID = normalizeChatID(b && b.id);
+                if (aID && bID && aID !== bID) {
+                    return aID - bID;
+                }
+                const aTime = new Date((a && a.created_at) || 0).getTime() || 0;
+                const bTime = new Date((b && b.created_at) || 0).getTime() || 0;
+                return aTime - bTime;
+            });
+        }
+
+        function getRenderedGlobalMessages() {
+            const persisted = Array.isArray(latestGlobalMessages) ? latestGlobalMessages : [];
+            const optimistic = Array.isArray(optimisticGlobalMessages) ? optimisticGlobalMessages : [];
+
+            const normalizeForMatch = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+            const toEpochMs = (value) => {
+                const epoch = new Date(value || '').getTime();
+                return Number.isFinite(epoch) ? epoch : 0;
+            };
+
+            const dedupeWindowMs = 45000;
+            const persistedKeys = new Map();
+            persisted.forEach((item) => {
+                const sender = String(item && item.sender || '').toLowerCase();
+                const message = normalizeForMatch(item && item.message);
+                if (!sender || !message) return;
+
+                const key = sender + '|' + message;
+                if (!persistedKeys.has(key)) {
+                    persistedKeys.set(key, []);
+                }
+                persistedKeys.get(key).push(toEpochMs(item && item.created_at));
+            });
+
+            const filteredOptimistic = optimistic.filter((item) => {
+                const localState = String(item && item._localState || '').toLowerCase();
+                if (localState !== 'sending') {
+                    return true;
+                }
+
+                const sender = String(item && item.sender || '').toLowerCase();
+                const message = normalizeForMatch(item && item.message);
+                if (!sender || !message) {
+                    return true;
+                }
+
+                const key = sender + '|' + message;
+                const persistedTimes = persistedKeys.get(key);
+                if (!Array.isArray(persistedTimes) || persistedTimes.length === 0) {
+                    return true;
+                }
+
+                const optimisticTime = toEpochMs(item && item.created_at);
+                return !persistedTimes.some((persistedTime) => {
+                    if (!persistedTime || !optimisticTime) return false;
+                    return Math.abs(persistedTime - optimisticTime) <= dedupeWindowMs;
+                });
+            });
+
+            return sortChatMessages([...(persisted || []), ...filteredOptimistic]);
+        }
+
+        function upsertGlobalChatMessage(message) {
+            if (!message) return false;
+            const targetID = normalizeChatID(message.id);
+            if (!targetID) return false;
+
+            const existingIndex = latestGlobalMessages.findIndex((item) => normalizeChatID(item && item.id) === targetID);
+            if (existingIndex >= 0) {
+                latestGlobalMessages[existingIndex] = message;
+                return false;
+            }
+
+            latestGlobalMessages.push(message);
+            latestGlobalMessages = sortChatMessages(latestGlobalMessages);
+            return true;
+        }
+
+        function removeOptimisticGlobalMessage(tempID) {
+            optimisticGlobalMessages = optimisticGlobalMessages.filter((item) => String(item.id) !== String(tempID));
+        }
+
+        function normalizeGlobalDisplayMessage(message) {
+            let text = String(message || '').trim();
+            if (!text) return '';
+
+            text = text.replace(/^Agent response\s*\n?/i, '').trim();
+
+            const progressPrefix = 'Working on your request...';
+            if (text.toLowerCase().startsWith(progressPrefix.toLowerCase())) {
+                const remainder = text.slice(progressPrefix.length).trim();
+                if (remainder) {
+                    let quoted = remainder.replace(/^"+|"+$/g, '');
+                    quoted = '"' + quoted + '"';
+                    return progressPrefix + '\n' + quoted;
+                }
+                return progressPrefix;
+            }
+
+            return text;
+        }
+
+        function updateGlobalChatJumpControls() {
+            const link = document.getElementById('global-chat-new-link');
+            if (!link) return;
+            const show = globalUnseenMessageCount > 0;
+            link.classList.toggle('show', show);
+            link.textContent = show
+                ? `New message${globalUnseenMessageCount > 1 ? 's' : ''} (${globalUnseenMessageCount})`
+                : 'New messages';
+        }
+
+        function clearGlobalUnreadJumpState() {
+            globalUnseenMessageCount = 0;
+            globalFirstUnseenMessageID = 0;
+            updateGlobalChatJumpControls();
+        }
+
+        function scrollGlobalChatToBottom() {
+            const listEl = document.getElementById('global-chat-list');
+            if (!listEl) return;
+            listEl.scrollTop = listEl.scrollHeight;
+            clearGlobalUnreadJumpState();
+        }
+
+        function scrollGlobalChatToFirstNewMessage() {
+            const listEl = document.getElementById('global-chat-list');
+            if (!listEl) return;
+
+            if (globalFirstUnseenMessageID > 0) {
+                const target = listEl.querySelector(`.chat-item[data-message-id="${globalFirstUnseenMessageID}"]`);
+                if (target && typeof target.scrollIntoView === 'function') {
+                    target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            }
+
+            clearGlobalUnreadJumpState();
+        }
+
+        function isChatNearBottom(listEl) {
+            if (!listEl) return true;
+            const threshold = 48;
+            const distanceFromBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+            return distanceFromBottom <= threshold;
+        }
+
         function renderGlobalChat(messages) {
             const listEl = document.getElementById('global-chat-list');
             if (!listEl) return;
 
-            if (!messages || messages.length === 0) {
+            const previousMaxID = latestGlobalMessages.reduce((max, item) => Math.max(max, normalizeChatID(item && item.id)), 0);
+
+            latestGlobalMessages = sortChatMessages(Array.isArray(messages) ? messages : []);
+            const combinedMessages = getRenderedGlobalMessages();
+            updateGlobalNotificationBadge(latestGlobalMessages);
+
+            const previousBottomOffset = listEl.scrollHeight - listEl.scrollTop;
+            const nearBottom = isChatNearBottom(listEl);
+            const shouldStickToBottom = !globalChatInitialScrollDone || nearBottom;
+
+            if (!combinedMessages || combinedMessages.length === 0) {
                 listEl.innerHTML = '<div class="chat-empty">No messages yet.</div>';
+                clearGlobalUnreadJumpState();
                 return;
             }
 
             listEl.innerHTML = '';
-            messages.forEach((item) => {
+            combinedMessages.forEach((item) => {
                 const wrapper = document.createElement('div');
-                wrapper.className = 'chat-item';
+                const sender = String(item.sender || '').toLowerCase();
+                const mine = sender === 'admin';
+                const localState = String(item._localState || '').toLowerCase();
+                wrapper.className = 'chat-item ' + (mine ? 'mine' : 'theirs') + (localState ? (' ' + localState) : '');
+
+                const messageID = normalizeChatID(item && item.id);
+                if (messageID > 0) {
+                    wrapper.setAttribute('data-message-id', String(messageID));
+                }
+
+                const bubble = document.createElement('div');
+                bubble.className = 'chat-bubble';
 
                 const meta = document.createElement('div');
                 meta.className = 'chat-meta';
@@ -414,19 +1524,262 @@
 
                 const text = document.createElement('div');
                 text.className = 'chat-text';
-                text.textContent = item.message;
+                const displayMessage = normalizeGlobalDisplayMessage(item.message);
+                text.textContent = displayMessage;
 
-                wrapper.appendChild(meta);
-                wrapper.appendChild(text);
+                bubble.appendChild(meta);
+                bubble.appendChild(text);
+
+                if (sender.startsWith('agent:')) {
+                    const commands = extractExplicitCommandsFromMessage(displayMessage || '');
+                    if (commands.length > 0) {
+                        const commandList = document.createElement('div');
+                        commandList.className = 'chat-command-list';
+
+                        commands.forEach((commandText) => {
+                            const commandRow = document.createElement('div');
+                            commandRow.className = 'chat-command-row';
+
+                            const commandValue = document.createElement('code');
+                            commandValue.textContent = commandText;
+
+                            const copyButton = document.createElement('button');
+                            copyButton.type = 'button';
+                            copyButton.className = 'chat-copy-btn';
+                            copyButton.textContent = 'Copy';
+                            copyButton.addEventListener('click', () => copyCommandToGlobalInput(commandText));
+
+                            commandRow.appendChild(commandValue);
+                            commandRow.appendChild(copyButton);
+                            commandList.appendChild(commandRow);
+                        });
+
+                        bubble.appendChild(commandList);
+                    }
+                }
+
+                if (localState) {
+                    const delivery = document.createElement('div');
+                    delivery.className = 'chat-delivery';
+                    delivery.textContent = localState === 'sending' ? 'Sending…' : (localState === 'failed' ? 'Failed to send' : localState);
+                    bubble.appendChild(delivery);
+                }
+
+                wrapper.appendChild(bubble);
+
                 listEl.appendChild(wrapper);
             });
 
-            listEl.scrollTop = listEl.scrollHeight;
+            if (shouldStickToBottom) {
+                listEl.scrollTop = listEl.scrollHeight;
+                clearGlobalUnreadJumpState();
+            } else {
+                listEl.scrollTop = Math.max(0, listEl.scrollHeight - previousBottomOffset);
+
+                const newPersistedMessages = latestGlobalMessages.filter((item) => normalizeChatID(item && item.id) > previousMaxID);
+                if (newPersistedMessages.length > 0) {
+                    if (globalFirstUnseenMessageID <= 0) {
+                        globalFirstUnseenMessageID = normalizeChatID(newPersistedMessages[0] && newPersistedMessages[0].id);
+                    }
+                    globalUnseenMessageCount += newPersistedMessages.length;
+                    updateGlobalChatJumpControls();
+                }
+            }
+
+            globalChatInitialScrollDone = true;
+
+            if (globalPendingReplyAfterMessageID > 0) {
+                const hasAgentReply = latestGlobalMessages.some((item) => {
+                    const id = normalizeChatID(item && item.id);
+                    return id > globalPendingReplyAfterMessageID && String(item && item.sender || '').toLowerCase() === 'system:global';
+                });
+                if (hasAgentReply) {
+                    globalPendingReplyAfterMessageID = 0;
+                    setGlobalTypingIndicator(false);
+                }
+            }
+        }
+
+        function getGlobalLastSeenMessageId() {
+            const raw = localStorage.getItem(globalLastSeenStorageKey);
+            const parsed = Number(raw);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function setGlobalLastSeenMessageId(id) {
+            localStorage.setItem(globalLastSeenStorageKey, String(id || 0));
+        }
+
+        function getGlobalLastSeenIssueUpdatedAtMs() {
+            const raw = localStorage.getItem(globalIssueLastSeenStorageKey);
+            const parsed = Number(raw);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function setGlobalLastSeenIssueUpdatedAtMs(ms) {
+            localStorage.setItem(globalIssueLastSeenStorageKey, String(ms || 0));
+        }
+
+        function parseAgentIdFromSender(sender) {
+            const raw = String(sender || '').trim();
+            const prefix = 'agent:';
+            if (!raw.toLowerCase().startsWith(prefix)) return '';
+            return raw.slice(prefix.length).trim();
+        }
+
+        function issueNotificationTimestampMs(item) {
+            const raw = item && (item.updated_at || item.last_seen_at || item.created_at);
+            const date = new Date(raw || '');
+            return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+        }
+
+        function buildUnreadNotificationItems() {
+            const notifications = [];
+
+            const lastSeenMessageId = getGlobalLastSeenMessageId();
+            (Array.isArray(latestGlobalMessages) ? latestGlobalMessages : []).forEach((item) => {
+                if (!item) return;
+                const sender = String(item.sender || '');
+                const senderLower = sender.toLowerCase();
+                if (!senderLower.startsWith('agent:')) return;
+                const id = Number(item.id) || 0;
+                if (id <= lastSeenMessageId) return;
+
+                const agentId = parseAgentIdFromSender(sender);
+                const createdAt = item.created_at || new Date().toISOString();
+                const target = agentId ? ('/agents/' + encodeURIComponent(agentId)) : '/agents';
+                notifications.push({
+                    kind: 'chat',
+                    title: 'New agent chat message',
+                    meta: `${sender} • ${String(item.message || '').slice(0, 140)}`,
+                    when: createdAt,
+                    href: target,
+                });
+            });
+
+            const lastSeenIssueMs = getGlobalLastSeenIssueUpdatedAtMs();
+            (Array.isArray(latestGlobalIssues) ? latestGlobalIssues : []).forEach((item) => {
+                if (!item) return;
+                const status = String(item.status || '').toLowerCase();
+                if (status !== 'active') return;
+                if (item.suppressed) return;
+
+                const updatedMs = issueNotificationTimestampMs(item);
+                if (updatedMs <= lastSeenIssueMs) return;
+
+                const agentId = String(item.agent_id || '').trim();
+                const issueTitle = String(item.title || item.issue_key || 'Issue alert');
+                const severity = String(item.severity || 'medium').toLowerCase();
+                const category = String(item.category || 'general').toLowerCase();
+                const target = agentId ? ('/agents/' + encodeURIComponent(agentId)) : '/agents';
+
+                notifications.push({
+                    kind: 'alert',
+                    title: issueTitle,
+                    meta: `Agent: ${agentId || '-'} • ${severity}/${category}`,
+                    when: item.updated_at || item.last_seen_at || item.created_at || new Date().toISOString(),
+                    href: target,
+                });
+            });
+
+            notifications.sort((a, b) => {
+                const aMs = new Date(a.when).getTime() || 0;
+                const bMs = new Date(b.when).getTime() || 0;
+                return bMs - aMs;
+            });
+
+            return notifications;
+        }
+
+        function renderGlobalNotificationPopup(items) {
+            const listEl = document.getElementById('global-notif-list');
+            if (!listEl) return;
+
+            if (!Array.isArray(items) || items.length === 0) {
+                listEl.innerHTML = '<div class="notif-popup-empty">No new notifications.</div>';
+                return;
+            }
+
+            listEl.innerHTML = items.map((item) => {
+                const typeLabel = item.kind === 'alert' ? 'Alert' : 'Chat';
+                const safeHref = escapeHtml(item.href || '/agents');
+                return `<a class="notif-item" href="${safeHref}">
+                    <div class="notif-item-head">
+                        <span class="notif-item-type">${escapeHtml(typeLabel)}</span>
+                        <span class="notif-item-time">${escapeHtml(formatTimestamp(item.when))}</span>
+                    </div>
+                    <div class="notif-item-title">${escapeHtml(item.title || '')}</div>
+                    <div class="notif-item-meta">${escapeHtml(item.meta || '')}</div>
+                </a>`;
+            }).join('');
+
+            listEl.querySelectorAll('a.notif-item').forEach((link) => {
+                link.addEventListener('click', () => {
+                    markGlobalNotificationsAsRead();
+                });
+            });
+        }
+
+        function isGlobalNotificationPopupOpen() {
+            const popup = document.getElementById('global-notif-popup');
+            return !!(popup && popup.classList.contains('show'));
+        }
+
+        function closeGlobalNotificationPopup() {
+            const popup = document.getElementById('global-notif-popup');
+            if (!popup) return;
+            popup.classList.remove('show');
+        }
+
+        function openGlobalNotificationPopup() {
+            const popup = document.getElementById('global-notif-popup');
+            if (!popup) return;
+            popup.classList.add('show');
+        }
+
+        function toggleGlobalNotificationPopup() {
+            if (isGlobalNotificationPopupOpen()) {
+                closeGlobalNotificationPopup();
+            } else {
+                openGlobalNotificationPopup();
+            }
+        }
+
+        function updateGlobalNotificationBadge() {
+            const badge = document.getElementById('global-notif-count');
+            if (!badge) return;
+
+            const unreadItems = buildUnreadNotificationItems();
+            const unreadCount = unreadItems.length;
+            badge.textContent = String(unreadCount);
+            badge.classList.toggle('show', unreadCount > 0);
+            renderGlobalNotificationPopup(unreadItems);
+        }
+
+        function markGlobalNotificationsAsRead() {
+            if (Array.isArray(latestGlobalMessages) && latestGlobalMessages.length > 0) {
+                const maxId = latestGlobalMessages.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+                setGlobalLastSeenMessageId(maxId);
+            }
+
+            if (Array.isArray(latestGlobalIssues) && latestGlobalIssues.length > 0) {
+                const maxIssueMs = latestGlobalIssues.reduce((max, item) => Math.max(max, issueNotificationTimestampMs(item)), 0);
+                setGlobalLastSeenIssueUpdatedAtMs(maxIssueMs);
+            }
+
+            updateGlobalNotificationBadge();
+            setGlobalChatStatus('Notifications marked as read.', 'ok');
         }
 
         async function loadGlobalChat() {
+            const sessionID = getActiveGlobalSessionID();
+            if (sessionID <= 0) {
+                renderGlobalChat([]);
+                return;
+            }
+
             try {
-                const response = await fetch('/api/chat/messages?scope=global&limit=100', {
+                const response = await fetch('/api/chat/messages?scope=global&limit=100&session_id=' + encodeURIComponent(String(sessionID)), {
                     credentials: 'same-origin',
                 });
                 if (response.status === 401 || response.status === 403) {
@@ -438,20 +1791,106 @@
                 }
 
                 const data = await response.json();
+                if (globalPendingReplyAfterMessageID > 0) {
+                    const hasAgentReply = (Array.isArray(data) ? data : []).some((item) => {
+                        const sender = String(item && item.sender || '').toLowerCase();
+                        return normalizeChatID(item && item.id) > globalPendingReplyAfterMessageID && sender === 'system:global';
+                    });
+                    if (hasAgentReply) {
+                        globalPendingReplyAfterMessageID = 0;
+                        setGlobalTypingIndicator(false);
+                    }
+                }
                 renderGlobalChat(data);
             } catch (err) {
                 setGlobalChatStatus(err.message || 'Failed to load global chat.', 'error');
             }
         }
 
+        function getLatestPersistedGlobalMessageID() {
+            return (latestGlobalMessages || []).reduce((max, item) => Math.max(max, normalizeChatID(item && item.id)), 0);
+        }
+
+        function startGlobalChatStream() {
+            try {
+                if (globalChatEventSource) {
+                    globalChatEventSource.close();
+                }
+
+                const sessionID = getActiveGlobalSessionID();
+                if (sessionID <= 0) {
+                    setGlobalChatLiveIndicator('Select a chat session to start streaming.', 'warn');
+                    return;
+                }
+
+                const sinceID = getLatestPersistedGlobalMessageID();
+                const streamURL = '/api/chat/stream?scope=global&session_id=' + encodeURIComponent(String(sessionID)) + '&since_id=' + encodeURIComponent(String(sinceID));
+                const source = new EventSource(streamURL, { withCredentials: true });
+                globalChatEventSource = source;
+
+                source.onopen = () => {
+                    setGlobalChatLiveIndicator('Live updates connected.', 'ok');
+                };
+
+                source.onmessage = (event) => {
+                    try {
+                        const item = JSON.parse(event.data);
+                        const inserted = upsertGlobalChatMessage(item);
+                        if (!inserted) return;
+
+                        if (globalPendingReplyAfterMessageID > 0 && String(item.sender || '').toLowerCase() === 'system:global' && normalizeChatID(item.id) > globalPendingReplyAfterMessageID) {
+                            globalPendingReplyAfterMessageID = 0;
+                            setGlobalTypingIndicator(false);
+                        }
+
+                        renderGlobalChat(latestGlobalMessages);
+                    } catch (err) {
+                        console.warn('global chat stream parse error', err);
+                    }
+                };
+
+                source.onerror = () => {
+                    setGlobalChatLiveIndicator('Live updates disconnected; using polling fallback.', 'warn');
+                };
+            } catch (err) {
+                setGlobalChatLiveIndicator('Live updates unavailable; using polling fallback.', 'warn');
+            }
+        }
+
         async function sendGlobalChatMessage() {
             const input = document.getElementById('global-chat-input');
+            const sendButton = document.getElementById('global-chat-send');
             if (!input) return;
             const message = input.value.trim();
+            const sessionID = getActiveGlobalSessionID();
+            if (globalChatSendInFlight) {
+                return;
+            }
             if (!message) {
                 setGlobalChatStatus('Message is required.', 'error');
                 return;
             }
+            if (sessionID <= 0) {
+                setGlobalChatStatus('Select or create a chat session first.', 'error');
+                return;
+            }
+
+            globalChatSendInFlight = true;
+            if (sendButton) {
+                sendButton.disabled = true;
+            }
+
+            const temporaryID = 'tmp-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
+            optimisticGlobalMessages.push({
+                id: temporaryID,
+                scope: 'global',
+                sender: 'admin',
+                message: message,
+                created_at: new Date().toISOString(),
+                _localState: 'sending',
+            });
+            renderGlobalChat(latestGlobalMessages);
+            setGlobalTypingIndicator(true, 'Agent is thinking…');
 
             try {
                 const response = await fetch('/api/chat/messages', {
@@ -462,6 +1901,7 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({
                         scope: 'global',
+                        session_id: sessionID,
                         message: message,
                     }),
                 });
@@ -474,17 +1914,391 @@
                     throw new Error('Global chat send failed: ' + response.status);
                 }
 
+                const created = await response.json();
+                removeOptimisticGlobalMessage(temporaryID);
+                upsertGlobalChatMessage(created);
+                globalPendingReplyAfterMessageID = Math.max(globalPendingReplyAfterMessageID, normalizeChatID(created && created.id));
+
                 input.value = '';
                 setGlobalChatStatus('Message sent.', 'ok');
-                await loadGlobalChat();
+                renderGlobalChat(latestGlobalMessages);
             } catch (err) {
+                optimisticGlobalMessages = optimisticGlobalMessages.map((item) => {
+                    if (String(item.id) !== String(temporaryID)) return item;
+                    return { ...item, _localState: 'failed' };
+                });
+                setGlobalTypingIndicator(false);
+                renderGlobalChat(latestGlobalMessages);
                 setGlobalChatStatus(err.message || 'Failed to send message.', 'error');
+            } finally {
+                globalChatSendInFlight = false;
+                if (sendButton) {
+                    sendButton.disabled = false;
+                }
+            }
+        }
+
+        function matchesIssueFilters(item) {
+            const severityFilterEl = document.getElementById('issues-filter-severity');
+            const categoryFilterEl = document.getElementById('issues-filter-category');
+            const agentFilterEl = document.getElementById('issues-filter-agent');
+
+            const severityFilter = (severityFilterEl ? severityFilterEl.value : '').trim().toLowerCase();
+            const categoryFilter = (categoryFilterEl ? categoryFilterEl.value : '').trim().toLowerCase();
+            const agentFilter = (agentFilterEl ? agentFilterEl.value : '').trim().toLowerCase();
+
+            const severity = String(item.severity || '').toLowerCase();
+            const category = String(item.category || '').toLowerCase();
+            const agentID = String(item.agent_id || '').toLowerCase();
+
+            if (severityFilter && severity !== severityFilter) return false;
+            if (categoryFilter && category !== categoryFilter) return false;
+            if (agentFilter && !agentID.includes(agentFilter)) return false;
+            return true;
+        }
+
+        function renderGlobalIssues(items) {
+            const listEl = document.getElementById('global-issues-list');
+            if (!listEl) return;
+
+            const filtered = (Array.isArray(items) ? items : []).filter(matchesIssueFilters);
+            const result = paginateArray(filtered, pagination.issues.page, pagination.issues.limit);
+            pagination.issues.page = result.currentPage;
+            pagination.issues.total = result.total;
+            pagination.issues.totalPages = result.totalPages;
+            updatePagerControls('issues', pagination.issues);
+
+            if (result.paged.length === 0) {
+                listEl.innerHTML = '<div class="chat-empty">No issues found for selected filters.</div>';
+                return;
+            }
+
+            const html = result.paged.map((item) => {
+                const severity = String(item.severity || 'medium').toLowerCase();
+                const status = String(item.status || 'active').toLowerCase();
+                const suppressed = !!item.suppressed;
+                const snoozedUntil = item.snoozed_until ? new Date(item.snoozed_until) : null;
+                const snoozedActive = !suppressed && snoozedUntil && !Number.isNaN(snoozedUntil.getTime()) && snoozedUntil.getTime() > Date.now();
+                const effectiveStatus = suppressed ? 'suppressed' : (snoozedActive ? 'snoozed' : status);
+                const statusClass = (suppressed || snoozedActive) ? 'resolved' : status;
+                const actions = Array.isArray(item.recommended_actions) ? item.recommended_actions : [];
+
+                const actionsHtml = actions.length === 0
+                    ? '<div class="chat-empty">No recommended actions.</div>'
+                    : actions.map((action) => {
+                        const supportsSchedule = !!action.supports_schedule;
+                        return `<div class="issue-action-row">
+                            <div class="issue-action-top">
+                                <div class="issue-action-label">${escapeHtml(action.label || action.id || 'Action')}</div>
+                                <span class="status-pill status-active">${escapeHtml(action.kind || 'command')}</span>
+                            </div>
+                            <div class="issue-action-buttons">
+                                <button class="small-btn" data-issue-id="${item.id}" data-action-id="${escapeHtml(action.id || '')}" data-mode="run_now">Run Now</button>
+                                ${supportsSchedule ? `<button class="small-btn" data-issue-id="${item.id}" data-action-id="${escapeHtml(action.id || '')}" data-mode="schedule">Schedule</button>` : ''}
+                            </div>
+                        </div>`;
+                    }).join('');
+
+                const resolveButtonHtml = status !== 'resolved' && !suppressed
+                    ? `<div class="issue-action-row">
+                            <div class="issue-action-top">
+                                <div class="issue-action-label">Manual Issue Control</div>
+                                <span class="status-pill status-resolved">resolve</span>
+                            </div>
+                            <div class="issue-action-buttons">
+                                <button class="small-btn" data-issue-resolve="${item.id}">Mark Resolved</button>
+                                <button class="small-btn" data-issue-snooze="${item.id}">Snooze</button>
+                                <button class="small-btn" data-issue-suppress="${item.id}">Suppress</button>
+                            </div>
+                        </div>`
+                    : '';
+
+                const muteMeta = suppressed
+                    ? ` • Suppressed permanently`
+                    : (snoozedActive ? ` • Snoozed until ${escapeHtml(formatTimestamp(item.snoozed_until))}` : '');
+
+                return `<div class="issue-card">
+                    <div class="issue-head">
+                        <div class="issue-title">${escapeHtml(item.title || item.issue_key || 'Issue')}</div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <span class="severity-pill severity-${severity}">${escapeHtml(severity || 'medium')}</span>
+                            <span class="status-pill status-${statusClass}">${escapeHtml(effectiveStatus || 'active')}</span>
+                        </div>
+                    </div>
+                    <div class="issue-meta">Agent: ${escapeHtml(item.agent_id || '-')} • Category: ${escapeHtml(item.category || '-')} • Updated: ${escapeHtml(formatTimestamp(item.updated_at || item.last_seen_at || item.created_at))}${muteMeta}</div>
+                    <div class="issue-desc">${escapeHtml(item.description || '')}</div>
+                    <div class="issue-actions">${actionsHtml}${resolveButtonHtml}</div>
+                </div>`;
+            }).join('');
+
+            listEl.innerHTML = html;
+
+            listEl.querySelectorAll('button[data-action-id]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-id'));
+                    const actionId = btn.getAttribute('data-action-id') || '';
+                    const mode = btn.getAttribute('data-mode') || 'run_now';
+                    await executeGlobalIssueAction(issueId, actionId, mode);
+                });
+            });
+
+            listEl.querySelectorAll('button[data-issue-resolve]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-resolve'));
+                    await resolveGlobalIssue(issueId);
+                });
+            });
+
+            listEl.querySelectorAll('button[data-issue-snooze]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-snooze'));
+                    await snoozeGlobalIssue(issueId);
+                });
+            });
+
+            listEl.querySelectorAll('button[data-issue-suppress]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-suppress'));
+                    await suppressGlobalIssue(issueId);
+                });
+            });
+        }
+
+        function toRFC3339FromLocalInput(value) {
+            if (!value) return '';
+            const dt = new Date(value);
+            if (Number.isNaN(dt.getTime())) return '';
+            return dt.toISOString();
+        }
+
+        async function executeGlobalIssueAction(issueId, actionId, mode) {
+            if (!issueId || !actionId) {
+                setGlobalIssuesStatus('Issue/action is missing.', 'error');
+                return;
+            }
+
+            const body = {
+                action_id: actionId,
+                mode: mode,
+            };
+
+            if (mode === 'schedule') {
+                const localValue = prompt('Enter schedule time (local) as YYYY-MM-DDTHH:mm', '');
+                if (localValue === null) {
+                    return;
+                }
+                const runAt = toRFC3339FromLocalInput(localValue.trim());
+                if (!runAt) {
+                    setGlobalIssuesStatus('Invalid schedule time format.', 'error');
+                    return;
+                }
+                body.run_at = runAt;
+                body.enabled = true;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue action failed: ' + response.status));
+                }
+
+                const result = await response.json();
+                setGlobalIssuesStatus(result.message || 'Issue action executed.', 'ok');
+                await loadGlobalIssues();
+            } catch (err) {
+                setGlobalIssuesStatus(err.message || 'Failed to execute issue action.', 'error');
+            }
+        }
+
+        async function resolveGlobalIssue(issueId) {
+            if (!issueId) {
+                setGlobalIssuesStatus('Issue is missing.', 'error');
+                return;
+            }
+
+            const confirmed = confirm('Mark this issue as resolved?');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/resolve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue resolve failed: ' + response.status));
+                }
+
+                const result = await response.json();
+                setGlobalIssuesStatus(result.message || 'Issue marked as resolved.', 'ok');
+                await loadGlobalIssues();
+            } catch (err) {
+                setGlobalIssuesStatus(err.message || 'Failed to mark issue resolved.', 'error');
+            }
+        }
+
+        async function snoozeGlobalIssue(issueId) {
+            if (!issueId) {
+                setGlobalIssuesStatus('Issue is missing.', 'error');
+                return;
+            }
+
+            const raw = prompt('Snooze this issue for how many minutes?', '120');
+            if (raw === null) {
+                return;
+            }
+
+            const minutes = Number((raw || '').trim());
+            if (!Number.isFinite(minutes) || minutes <= 0) {
+                setGlobalIssuesStatus('Invalid snooze duration.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/snooze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ minutes: Math.floor(minutes) }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue snooze failed: ' + response.status));
+                }
+
+                const result = await response.json();
+                setGlobalIssuesStatus(result.message || 'Issue snoozed.', 'ok');
+                await loadGlobalIssues();
+            } catch (err) {
+                setGlobalIssuesStatus(err.message || 'Failed to snooze issue.', 'error');
+            }
+        }
+
+        async function suppressGlobalIssue(issueId) {
+            if (!issueId) {
+                setGlobalIssuesStatus('Issue is missing.', 'error');
+                return;
+            }
+
+            const confirmed = confirm('Suppress this issue permanently for this agent? It will not alert again unless unsuppressed in DB.');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/suppress', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue suppress failed: ' + response.status));
+                }
+
+                const result = await response.json();
+                setGlobalIssuesStatus(result.message || 'Issue suppressed.', 'ok');
+                await loadGlobalIssues();
+            } catch (err) {
+                setGlobalIssuesStatus(err.message || 'Failed to suppress issue.', 'error');
+            }
+        }
+
+        async function loadGlobalIssues() {
+            const statusFilterEl = document.getElementById('issues-filter-status');
+            const agentFilterEl = document.getElementById('issues-filter-agent');
+
+            const statusFilter = (statusFilterEl ? statusFilterEl.value : '').trim();
+            const agentFilter = (agentFilterEl ? agentFilterEl.value : '').trim();
+
+            const params = new URLSearchParams();
+            params.set('limit', '300');
+            if (statusFilter) {
+                params.set('status', statusFilter);
+            }
+            if (agentFilter) {
+                params.set('agent_id', agentFilter);
+            }
+
+            try {
+                const response = await fetch('/api/issues?' + params.toString(), {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Issue list failed: ' + response.status);
+                }
+
+                latestGlobalIssues = await response.json();
+                renderGlobalIssues(latestGlobalIssues);
+                setGlobalIssuesStatus('Issues refreshed.', 'ok');
+            } catch (err) {
+                setGlobalIssuesStatus(err.message || 'Failed to load issues.', 'error');
             }
         }
 
         const logoutButton = document.getElementById('logout-button');
+        const globalNotifButton = document.getElementById('global-notif-button');
+        const globalNotifPopup = document.getElementById('global-notif-popup');
+        const globalNotifClose = document.getElementById('global-notif-close');
+        const globalNotifMarkRead = document.getElementById('global-notif-mark-read');
         const globalChatSendButton = document.getElementById('global-chat-send');
         const globalChatInput = document.getElementById('global-chat-input');
+        const globalChatList = document.getElementById('global-chat-list');
+        const globalChatNewLink = document.getElementById('global-chat-new-link');
+        const globalChatBottomButton = document.getElementById('global-chat-bottom-btn');
+        const globalChatNewSessionButton = document.getElementById('global-chat-new-session');
+        const issuesRefreshButton = document.getElementById('issues-refresh');
+        const issuesStatusFilter = document.getElementById('issues-filter-status');
+        const issuesSeverityFilter = document.getElementById('issues-filter-severity');
+        const issuesCategoryFilter = document.getElementById('issues-filter-category');
+        const issuesAgentFilter = document.getElementById('issues-filter-agent');
+        const agentsLimit = document.getElementById('agents-limit');
+        const agentsPrev = document.getElementById('agents-prev');
+        const agentsNext = document.getElementById('agents-next');
+        const issuesLimit = document.getElementById('issues-limit');
+        const issuesPrev = document.getElementById('issues-prev');
+        const issuesNext = document.getElementById('issues-next');
 
         if (logoutButton) {
             logoutButton.addEventListener('click', async () => {
@@ -497,6 +2311,38 @@
             globalChatSendButton.addEventListener('click', sendGlobalChatMessage);
         }
 
+        if (globalNotifButton) {
+            globalNotifButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleGlobalNotificationPopup();
+            });
+        }
+
+        if (globalNotifClose) {
+            globalNotifClose.addEventListener('click', (event) => {
+                event.preventDefault();
+                closeGlobalNotificationPopup();
+            });
+        }
+
+        if (globalNotifMarkRead) {
+            globalNotifMarkRead.addEventListener('click', (event) => {
+                event.preventDefault();
+                markGlobalNotificationsAsRead();
+            });
+        }
+
+        if (globalNotifPopup) {
+            globalNotifPopup.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+        }
+
+        document.addEventListener('click', () => {
+            closeGlobalNotificationPopup();
+        });
+
         if (globalChatInput) {
             globalChatInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -505,9 +2351,113 @@
                 }
             });
         }
+        if (globalChatNewLink) {
+            globalChatNewLink.addEventListener('click', () => {
+                scrollGlobalChatToFirstNewMessage();
+            });
+        }
+        if (globalChatBottomButton) {
+            globalChatBottomButton.addEventListener('click', () => {
+                scrollGlobalChatToBottom();
+            });
+        }
+        if (globalChatNewSessionButton) {
+            globalChatNewSessionButton.addEventListener('click', () => {
+                createNewGlobalChatSession();
+            });
+        }
+        if (globalChatList) {
+            globalChatList.addEventListener('scroll', () => {
+                if (isChatNearBottom(globalChatList)) {
+                    clearGlobalUnreadJumpState();
+                }
+            });
+        }
 
-        loadGlobalChat();
+        if (issuesRefreshButton) {
+            issuesRefreshButton.addEventListener('click', loadGlobalIssues);
+        }
+        if (issuesStatusFilter) {
+            issuesStatusFilter.addEventListener('change', () => {
+                pagination.issues.page = 1;
+                loadGlobalIssues();
+            });
+        }
+        if (issuesSeverityFilter) {
+            issuesSeverityFilter.addEventListener('change', () => {
+                pagination.issues.page = 1;
+                renderGlobalIssues(latestGlobalIssues);
+            });
+        }
+        if (issuesCategoryFilter) {
+            issuesCategoryFilter.addEventListener('change', () => {
+                pagination.issues.page = 1;
+                renderGlobalIssues(latestGlobalIssues);
+            });
+        }
+        if (issuesAgentFilter) {
+            issuesAgentFilter.addEventListener('input', () => {
+                pagination.issues.page = 1;
+                renderGlobalIssues(latestGlobalIssues);
+            });
+        }
+
+        if (agentsLimit) {
+            agentsLimit.addEventListener('change', () => {
+                pagination.agents.limit = Number(agentsLimit.value) || 20;
+                pagination.agents.page = 1;
+                renderAgentsTablePage();
+            });
+        }
+        if (agentsPrev) {
+            agentsPrev.addEventListener('click', () => {
+                pagination.agents.page = Math.max(1, pagination.agents.page - 1);
+                renderAgentsTablePage();
+            });
+        }
+        if (agentsNext) {
+            agentsNext.addEventListener('click', () => {
+                pagination.agents.page = pagination.agents.page + 1;
+                renderAgentsTablePage();
+            });
+        }
+
+        if (issuesLimit) {
+            issuesLimit.addEventListener('change', () => {
+                pagination.issues.limit = Number(issuesLimit.value) || 10;
+                pagination.issues.page = 1;
+                renderGlobalIssues(latestGlobalIssues);
+            });
+        }
+        if (issuesPrev) {
+            issuesPrev.addEventListener('click', () => {
+                pagination.issues.page = Math.max(1, pagination.issues.page - 1);
+                renderGlobalIssues(latestGlobalIssues);
+            });
+        }
+        if (issuesNext) {
+            issuesNext.addEventListener('click', () => {
+                pagination.issues.page = pagination.issues.page + 1;
+                renderGlobalIssues(latestGlobalIssues);
+            });
+        }
+
+        renderAgentsTablePage();
+        loadGlobalChatSessions().then(() => {
+            loadGlobalChat();
+            startGlobalChatStream();
+        });
+        loadGlobalIssues();
+        updateGlobalNotificationBadge();
         setInterval(loadGlobalChat, 5000);
+        setInterval(loadGlobalIssues, 15000);
+
+        window.addEventListener('beforeunload', () => {
+            if (globalChatEventSource) {
+                globalChatEventSource.close();
+                globalChatEventSource = null;
+            }
+        });
     </script>
 </body>
 </html>

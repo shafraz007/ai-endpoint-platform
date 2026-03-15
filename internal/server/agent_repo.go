@@ -8,7 +8,7 @@ import (
 )
 
 // UpsertAgent inserts or updates an agent in the database
-func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVersion string, lastLogin, lastReboot *time.Time, timezone string, hardwareVendor, hardwareModel, hardwareSerialNumber, motherboard, biosManufacturer, biosVersion, biosVersionDate, processor, memory, videoCard, sound, systemDrive, macAddresses, disks, drives, osEdition, osVersion, osBuild, windows11Eligible, dotnetVersion, officeVersion, antivirusName, antispywareName, firewallName string, tls12Compatible bool) error {
+func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVersion string, lastLogin, lastReboot *time.Time, timezone string, hardwareVendor, hardwareModel, hardwareSerialNumber, motherboard, biosManufacturer, biosVersion, biosVersionDate, processor, memory, videoCard, sound, systemDrive, macAddresses, disks, drives, osEdition, osVersion, osBuild, windows11Eligible, dotnetVersion, officeVersion, antivirusName, antispywareName, firewallName string, tls12Compatible bool, rebootRequired bool, patchScanAt *time.Time) error {
 	if agentID == "" {
 		return fmt.Errorf("agentID cannot be empty")
 	}
@@ -26,9 +26,10 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		memory, video_card, sound, system_drive, mac_addresses,
 		disks, drives,
 		os_edition, os_version, os_build, windows_11_eligible, tls_12_compatible,
-		dotnet_version, office_version, antivirus_name, antispyware_name, firewall_name
+		dotnet_version, office_version, antivirus_name, antispyware_name, firewall_name,
+		reboot_required, patch_scan_at
 	)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
 	ON CONFLICT (agent_id)
 	DO UPDATE SET
 		hostname = EXCLUDED.hostname,
@@ -66,6 +67,8 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		antivirus_name = EXCLUDED.antivirus_name,
 		antispyware_name = EXCLUDED.antispyware_name,
 		firewall_name = EXCLUDED.firewall_name,
+		reboot_required = EXCLUDED.reboot_required,
+		patch_scan_at = EXCLUDED.patch_scan_at,
 		updated_at = CURRENT_TIMESTAMP
 	`
 
@@ -110,6 +113,8 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		antivirusName,
 		antispywareName,
 		firewallName,
+		rebootRequired,
+		patchScanAt,
 	)
 
 	if err != nil {

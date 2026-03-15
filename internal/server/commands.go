@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,7 @@ import (
 
 type AgentCommand struct {
 	ID           int64
+	ScheduleID   *int64
 	AgentID      string
 	CommandType  string
 	Payload      string
@@ -32,12 +34,13 @@ func CreateCommand(ctx context.Context, agentID, commandType, payload string) (*
 	query := `
 	INSERT INTO agent_commands (agent_id, command_type, payload, status)
 	VALUES ($1, $2, $3, 'queued')
-	RETURNING id, agent_id, command_type, payload, status, created_at
+	RETURNING id, schedule_id, agent_id, command_type, payload, status, created_at
 	`
 
 	var cmd AgentCommand
 	if err := DB.QueryRow(ctx, query, agentID, commandType, payload).Scan(
 		&cmd.ID,
+		&cmd.ScheduleID,
 		&cmd.AgentID,
 		&cmd.CommandType,
 		&cmd.Payload,
@@ -48,6 +51,70 @@ func CreateCommand(ctx context.Context, agentID, commandType, payload string) (*
 	}
 
 	return &cmd, nil
+}
+
+func CreateAITaskCommandIfNotExists(ctx context.Context, agentID, payload, taskID string) (*AgentCommand, bool, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, false, fmt.Errorf("agentID is required")
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return nil, false, fmt.Errorf("taskID is required")
+	}
+
+	taskIDPattern := "%\"task_id\":\"" + taskID + "\"%"
+	lockKey := agentID + "|" + taskID
+
+	tx, err := DB.Begin(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to begin idempotent ai_task transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, lockKey); err != nil {
+		return nil, false, fmt.Errorf("failed to acquire idempotent ai_task lock: %w", err)
+	}
+
+	query := `
+	INSERT INTO agent_commands (agent_id, command_type, payload, status)
+	SELECT $1::text, 'ai_task', $2::text, 'queued'
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM agent_commands
+		WHERE agent_id = $1::text
+			AND command_type = 'ai_task'
+			AND payload LIKE $3::text
+	)
+	RETURNING id, schedule_id, agent_id, command_type, payload, status, created_at
+	`
+
+	var cmd AgentCommand
+	if err := tx.QueryRow(ctx, query, agentID, payload, taskIDPattern).Scan(
+		&cmd.ID,
+		&cmd.ScheduleID,
+		&cmd.AgentID,
+		&cmd.CommandType,
+		&cmd.Payload,
+		&cmd.Status,
+		&cmd.CreatedAt,
+	); err != nil {
+		if err == pgx.ErrNoRows {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return nil, false, fmt.Errorf("failed to commit duplicate ai_task transaction: %w", commitErr)
+			}
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("failed to create idempotent ai_task command: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, false, fmt.Errorf("failed to commit idempotent ai_task command: %w", err)
+	}
+
+	return &cmd, true, nil
 }
 
 func DequeueCommand(ctx context.Context, agentID string) (*AgentCommand, error) {
@@ -64,7 +131,7 @@ func DequeueCommand(ctx context.Context, agentID string) (*AgentCommand, error) 
 	}()
 
 	query := `
-	SELECT id, agent_id, command_type, payload, status, created_at
+	SELECT id, schedule_id, agent_id, command_type, payload, status, created_at
 	FROM agent_commands
 	WHERE agent_id = $1 AND status = 'queued'
 	ORDER BY created_at ASC
@@ -75,6 +142,7 @@ func DequeueCommand(ctx context.Context, agentID string) (*AgentCommand, error) 
 	var cmd AgentCommand
 	if err := tx.QueryRow(ctx, query, agentID).Scan(
 		&cmd.ID,
+		&cmd.ScheduleID,
 		&cmd.AgentID,
 		&cmd.CommandType,
 		&cmd.Payload,
@@ -145,7 +213,7 @@ func ListCommandsByAgent(ctx context.Context, agentID string, limit int) ([]Agen
 	}
 
 	query := `
-	SELECT id, agent_id, command_type, payload, status, created_at, dispatched_at, completed_at,
+	SELECT id, schedule_id, agent_id, command_type, payload, status, created_at, dispatched_at, completed_at,
 		COALESCE(output, ''), COALESCE(error, '')
 	FROM agent_commands
 	WHERE agent_id = $1
@@ -164,6 +232,7 @@ func ListCommandsByAgent(ctx context.Context, agentID string, limit int) ([]Agen
 		var cmd AgentCommand
 		if err := rows.Scan(
 			&cmd.ID,
+			&cmd.ScheduleID,
 			&cmd.AgentID,
 			&cmd.CommandType,
 			&cmd.Payload,
@@ -195,7 +264,7 @@ func GetCommandByID(ctx context.Context, commandID int64, agentID string) (*Agen
 	}
 
 	query := `
-	SELECT id, agent_id, command_type, payload, status, created_at, dispatched_at, completed_at,
+	SELECT id, schedule_id, agent_id, command_type, payload, status, created_at, dispatched_at, completed_at,
 		COALESCE(output, ''), COALESCE(error, '')
 	FROM agent_commands
 	WHERE id = $1 AND agent_id = $2
@@ -205,6 +274,7 @@ func GetCommandByID(ctx context.Context, commandID int64, agentID string) (*Agen
 	var cmd AgentCommand
 	err := DB.QueryRow(ctx, query, commandID, agentID).Scan(
 		&cmd.ID,
+		&cmd.ScheduleID,
 		&cmd.AgentID,
 		&cmd.CommandType,
 		&cmd.Payload,

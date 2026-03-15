@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This guide covers deploying the AI Endpoint Platform v1.0.0 to production environments.
+This guide covers deploying the AI Endpoint Platform to production environments.
 
 ## Pre-Deployment Checklist
 
@@ -20,7 +20,7 @@ This guide covers deploying the AI Endpoint Platform v1.0.0 to production enviro
 
 - [ ] **Network Infrastructure**
   - Firewall rules configured
-  - Agents can reach server on port 8080 (or custom port)
+  - Agents can reach server on port 8070 (or custom port)
   - API clients can access server endpoints
   - Database reachable from server
 
@@ -54,10 +54,23 @@ This guide covers deploying the AI Endpoint Platform v1.0.0 to production enviro
 # Build optimized binaries
 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/server ./cmd/server
 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent ./cmd/agent
+GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/chat-worker ./cmd/chat-worker
+GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bin/agent-linux-arm64 ./cmd/agent
+
+# For macOS agents
+GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent-darwin-amd64 ./cmd/agent
+GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/agent-darwin-arm64 ./cmd/agent
 
 # For Windows
 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/server.exe ./cmd/server
 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent.exe ./cmd/agent
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/chat-worker.exe ./cmd/chat-worker
+```
+
+PowerShell helper for all Linux/macOS agent builds:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-agent-all.ps1
 ```
 
 ### 2. Test Release Build
@@ -65,11 +78,11 @@ GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/agent.exe ./cmd/agent
 ```bash
 # Test in staging environment
 export DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@staging-db.internal:5432/ai_agents?sslmode=disable
-export SERVER_PORT=8080
+export SERVER_PORT=8070
 ./bin/server
 
 # In another terminal
-export SERVER_URL=http://localhost:8080
+export SERVER_URL=http://localhost:8070
 ./bin/agent
 ```
 
@@ -126,6 +139,10 @@ sudo chmod 755 /opt/ai-endpoint-platform/bin/server
 sudo cp bin/agent /opt/ai-endpoint-platform/bin/agent
 sudo chmod 755 /opt/ai-endpoint-platform/bin/agent
 
+# Copy chat-worker binary
+sudo cp bin/chat-worker /opt/ai-endpoint-platform/bin/chat-worker
+sudo chmod 755 /opt/ai-endpoint-platform/bin/chat-worker
+
 # Verify
 ls -la /opt/ai-endpoint-platform/bin/
 ```
@@ -139,7 +156,7 @@ Create `/etc/ai-endpoint-platform/server.env`:
 DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require
 
 # Server Configuration
-SERVER_PORT=8080
+SERVER_PORT=8070
 
 # Agent Monitoring (seconds)
 OFFLINE_TIMEOUT_SECONDS=90
@@ -149,6 +166,17 @@ OFFLINE_CHECK_INTERVAL_SECONDS=30
 AGENT_JWT_SECRET=<shared_agent_secret>
 ADMIN_JWT_SECRET=<admin_secret>
 ADMIN_JWT_TTL_SECONDS=3600
+
+# Queue / chat worker
+QUEUE_ENABLED=true
+QUEUE_PROVIDER=nats
+NATS_URL=nats://localhost:4222
+QUEUE_SUBJECT_PREFIX=chat
+QUEUE_AGENT_CHAT_ACTIVE=true
+QUEUE_AGENT_CHAT_SUBJECT=agent.chat.shadow
+QUEUE_AGENT_CHAT_CONSUMER_GROUP=agent-chat-workers
+QUEUE_AGENT_CHAT_MAX_ATTEMPTS=4
+QUEUE_AGENT_CHAT_DLQ_SUBJECT=agent.chat.shadow.dlq
 
 # Logging
 LOG_DIR=/var/log/ai-endpoint-platform
@@ -213,13 +241,47 @@ sudo systemctl status ai-endpoint-server
 sudo journalctl -u ai-endpoint-server -f
 ```
 
+#### 4b. Create Chat Worker Service
+
+Create `/etc/systemd/system/ai-endpoint-chat-worker.service`:
+
+```ini
+[Unit]
+Description=AI Endpoint Platform Chat Worker
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ai-endpoint
+WorkingDirectory=/opt/ai-endpoint-platform
+EnvironmentFile=/etc/ai-endpoint-platform/server.env
+ExecStart=/opt/ai-endpoint-platform/bin/chat-worker
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/ai-endpoint-platform/chat-worker.log
+StandardError=append:/var/log/ai-endpoint-platform/chat-worker.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable ai-endpoint-chat-worker
+sudo systemctl start ai-endpoint-chat-worker
+sudo systemctl status ai-endpoint-chat-worker
+```
+
 #### 5. Configure Reverse Proxy (HTTPS)
 
 Using nginx:
 
 ```nginx
 upstream ai_endpoint {
-    server localhost:8080;
+    server localhost:8070;
     keepalive 32;
 }
 
@@ -295,7 +357,7 @@ Copy-Item -Path "bin\agent.exe" -Destination $appPath
 
 ```powershell
 [Environment]::SetEnvironmentVariable("DATABASE_URL", "postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require", "Machine")
-[Environment]::SetEnvironmentVariable("SERVER_PORT", "8080", "Machine")
+[Environment]::SetEnvironmentVariable("SERVER_PORT", "8070", "Machine")
 [Environment]::SetEnvironmentVariable("OFFLINE_TIMEOUT_SECONDS", "90", "Machine")
 [Environment]::SetEnvironmentVariable("OFFLINE_CHECK_INTERVAL_SECONDS", "30", "Machine")
 [Environment]::SetEnvironmentVariable("AGENT_JWT_SECRET", "<shared_agent_secret>", "Machine")
@@ -310,7 +372,7 @@ nssm install AIEndpointServer `
   "C:\Program Files\AIEndpointPlatform\server.exe"
 
 nssm set AIEndpointServer AppEnvironmentExtra `
-  "DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require;SERVER_PORT=8080;OFFLINE_TIMEOUT_SECONDS=90;OFFLINE_CHECK_INTERVAL_SECONDS=30;AGENT_JWT_SECRET=<shared_agent_secret>;ADMIN_JWT_SECRET=<admin_secret>"
+  "DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require;SERVER_PORT=8070;OFFLINE_TIMEOUT_SECONDS=90;OFFLINE_CHECK_INTERVAL_SECONDS=30;AGENT_JWT_SECRET=<shared_agent_secret>;ADMIN_JWT_SECRET=<admin_secret>"
 
 # Configure Log
 nssm set AIEndpointServer AppStdout `
@@ -364,7 +426,7 @@ COPY --from=builder /build/agent /app/agent
 
 WORKDIR /app
 
-EXPOSE 8080
+EXPOSE 8070
 
 CMD ["./server"]
 ```
@@ -395,11 +457,11 @@ services:
     build: .
     environment:
       DATABASE_URL: postgres://ai_endpoint_user:${DB_PASSWORD}@db:5432/ai_agents?sslmode=disable
-      SERVER_PORT: 8080
+      SERVER_PORT: 8070
       AGENT_JWT_SECRET: ${AGENT_JWT_SECRET}
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
     ports:
-      - "8080:8080"
+      - "8070:8070"
     depends_on:
       db:
         condition: service_healthy
@@ -424,9 +486,9 @@ docker-compose logs -f server
 ps aux | grep server
 
 # Check listening port
-netstat -tlnp | grep 8080
+netstat -tlnp | grep 8070
 # or on Windows
-netstat -ano | findstr :8080
+netstat -ano | findstr :8070
 
 # Check service status
 sudo systemctl status ai-endpoint-server
@@ -452,13 +514,13 @@ psql -h prod-db.internal -U postgres -d ai_agents \
 
 ```bash
 # Test health endpoint
-curl -X GET http://localhost:8080/healthz
+curl -X GET http://localhost:8070/healthz
 
 # Test API
-curl -X GET http://localhost:8080/api/agents
+curl -X GET http://localhost:8070/api/agents
 
 # Test Web UI
-curl -X GET http://localhost:8080/agents
+curl -X GET http://localhost:8070/agents
 
 # Check response
 # Should return: empty agents list [] or HTML page
@@ -564,6 +626,21 @@ sudo systemctl start ai-endpoint-server
    - Replication lag (if applicable)
    - Disk usage
 
+### Platform Issue Monitoring (Built-in Alerts)
+
+The platform has a built-in durable issue system (alerting) backed by `agent_issues` and `issue_action_audit`.
+
+Operational checks:
+- Track active issues by severity (`critical`, `high`, `medium`, `low`)
+- Watch for issue churn (`active` <-> `resolved`) to detect unstable endpoints
+- Review failed remediation actions from `issue_action_audit` and investigate repeated failures
+- Validate scheduler safety for power operations: duplicate in-flight `restart`/`shutdown` commands are skipped per agent
+
+Recommended API checks:
+- `GET /api/issues?status=active&limit=200`
+- `GET /api/issues?status=resolved&limit=200`
+- `GET /api/issues?agent_id=<agent_id>&status=active&limit=100`
+
 ### Health Check Endpoint (/healthz)
 
 The server exposes `/healthz` and returns `{"status":"healthy"}`. It does not check database connectivity by default.
@@ -578,7 +655,7 @@ global:
 scrape_configs:
   - job_name: 'ai-endpoint'
     static_configs:
-      - targets: ['ai-endpoint.example.com:8080']
+      - targets: ['ai-endpoint.example.com:8070']
     metrics_path: '/metrics'
 ```
 
@@ -599,7 +676,7 @@ sudo systemctl restart rsyslog
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp      # SSH
-sudo ufw allow 8080/tcp    # Server (internal only)
+sudo ufw allow 8070/tcp    # Server (internal only)
 sudo ufw allow 443/tcp     # HTTPS (via reverse proxy)
 sudo ufw allow 5432/tcp from prod-db.internal  # Database
 
@@ -748,14 +825,14 @@ netstat -tlnp | grep 5432
 sudo journalctl -u ai-endpoint-server -n 50
 
 # Check port is available
-lsof -i :8080
+lsof -i :8070
 
 # Verify binary
 /opt/ai-endpoint-platform/bin/server -h
 ```
 
 **Solution:**
-1. Kill process using port 8080
+1. Kill process using port 8070
 2. Check permissions on binary (755)
 3. Verify environment variables loaded
 
@@ -765,14 +842,14 @@ lsof -i :8080
 ```bash
 # From agent machine
 ping prod-db.internal    # No - this is DB
-curl -v http://ai-endpoint.example.com:8080/api/agents
+curl -v http://ai-endpoint.example.com:8070/api/agents
 
 # Check firewall rules
 sudo ufw status
-sudo iptables -L -n | grep 8080
+sudo iptables -L -n | grep 8070
 
 # Test reverse proxy
-curl -v http://localhost:8080
+curl -v http://localhost:8070
 ```
 
 **Solution:**

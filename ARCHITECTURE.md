@@ -5,129 +5,109 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Web Browsers                             │
-│                    (http://localhost:8080)                       │
+│                    (http://localhost:8070)                       │
 └────────────────────────────────┬────────────────────────────────┘
                                  │
                     ┌────────────▼────────────┐
                     │   Server (Go HTTP)      │
-                    │  Port: 8080             │
-                    │  Routes:                │
+                    │  Port: 8070             │
+                    │  Core routes:           │
                     │  - /agents              │
                     │  - /agents/{id}         │
-                    │  - /api/agents/...      │
+                    │  - /settings            │
+                    │  - /reports             │
                     └────────────┬────────────┘
                                  │
                     ┌────────────▼────────────┐
                     │   PostgreSQL Database   │
-                    │   Database: ai_agents   │
-                    │   Connection Pool       │
+                    │   Persistent state:     │
+                    │   agents, commands,     │
+                    │   metrics, chat,        │
+                    │   governance, schedules,│
+                    │   issues (alerts), patch│
+                    │   policies, audit       │
                     └────────────┬────────────┘
                                  │
+                     Poll + ACK command flow
+                                 │
                 ┌────────────────┼────────────────┐
-            ┌───▼────┐       ┌───▼────┐       ┌───▼────┐
-            │ agents │       │ agents │       │ agents │
-            │ table  │       │ table  │       │ table  │
-            └───┬────┘       └───┬────┘       └───┬────┘
-                │               │               │
-        ┌───────▼────────┬──────▼────────┬──────▼───────┐
-        │                │               │               │
-    ┌───▴────┐       ┌───▴────┐      ┌──▴────┐      ┌──▴────┐
-    │ Agent 1 │       │ Agent 2 │      │Agent 3 │      │Agent N │
-    │(Windows)│       │(Linux)  │      │(macOS) │      │(...)   │
-    └─────────┘       └─────────┘      └────────┘      └────────┘
-         │                 │                 │              │
-         └─────────────────┴─────────────────┴──────────────┘
-                    Heartbeat (every 30s)
-                    POST /api/agents/heartbeat
+                │                │                │
+             ┌──▼──┐          ┌──▼──┐          ┌──▼──┐
+             │Agent│          │Agent│          │Agent│
+             │ A   │          │ B   │          │ N   │
+             └─────┘          └─────┘          └─────┘
 ```
 
-## Component Architecture
+## Core Runtime Flows
 
-### Agent Architecture
+### 1) Inventory + Presence
+- Agent sends heartbeat to `POST /api/heartbeat`.
+- Server upserts agent identity/system fields and updates status/last seen.
+- Offline checker marks stale agents offline.
 
-**Responsibilities:**
-- System information collection
-- Hardware detection (Windows/Linux/macOS)
-- Network communication with server
-- Periodic heartbeat transmission
-- Graceful shutdown handling
+### 2) Commands + Acknowledgements
+- Admin (or scheduler/chat) enqueues commands in DB.
+- For personal chat in queue mode, server publishes an `agent_chat_task` event and returns immediately.
+- `cmd/chat-worker` consumes queue events (optionally via consumer group), creates idempotent `ai_task` commands, and applies retry/DLQ policy on failure.
+- Agent polls `GET /api/commands/next` with agent JWT.
+- Agent executes command and acknowledges via `POST /api/commands/ack`.
+- For personal-chat `ai_task` commands, server relays progress and final response to chat.
 
-**Key Files:**
-- `cmd/agent/main.go` - Entry point, heartbeat loop
-- `internal/agent/systeminfo.go` - System information collection
-- `internal/config/config.go` - Configuration loading
+### 3) Chat + Governance
+- Global and personal chat are stored server-side.
+- Personal chat requests become `ai_task` commands.
+- Governance checks command intents before queueing executable chat actions.
+- Deterministic policy queries (for example, "is format command allowed") are answered server-side.
 
-### Server Architecture
+### 4) Scheduling + Reports
+- Scheduler dispatcher runs periodically and enqueues due schedule actions.
+- Scheduler skips duplicate in-flight power commands (`restart` / `shutdown`) for an agent when same type is already `queued` or `dispatched`.
+- Schedule executions are persisted and exposed in reports API/UI.
+- OS patch behavior is configured through dedicated patch policy endpoints (not schedule kind `patch`).
 
-**Responsibilities:**
-- Receive and persist heartbeat data
-- Track agent status (online/offline)
-- Offline agent detection
-- Web UI and REST API
-- Database migrations
+### 5) Issues (Alerts) and Remediation
+- Heartbeat and metrics pipelines evaluate detector rules and upsert durable issues in `agent_issues`.
+- Issues are deduplicated by `(agent_id, issue_key)` and transition between `active` and `resolved` as conditions change.
+- Each issue stores evidence, suggestions, action plan, and recommended remediation actions.
+- Admins can execute immediately or schedule remediation through `POST /api/issues/{id}/actions`.
+- Action operations are audited in `issue_action_audit` with linked command and schedule IDs.
 
-**Key Files:**
-- `cmd/server/main.go` - Entry point, routing
-- `internal/server/agents.go` - Agent data model
-- `internal/server/agent_repo.go` - Database access
-- `internal/migrations/migrations.go` - Schema management
+## Key Modules
+
+### Agent
+- `cmd/agent/main.go`: startup, heartbeat loop, command polling/execution, AI task handling
+- `internal/agent/systeminfo.go`: endpoint profile collection
+- `internal/agent/osinfo.go`: OS and security details
+- `internal/agent/metrics.go`: metrics sampling
+
+### Server
+- `cmd/server/main.go`: routing, migrations, background loops
+- `cmd/server/chat.go`: chat APIs + personal chat task queueing
+- `cmd/server/commands.go`: command APIs, dequeue, ack relay to chat
+- `internal/server/*.go`: persistence layer for agents, commands, chat, governance, schedules, issues, reports, users
+
+### Queue Worker
+- `cmd/chat-worker/main.go`: queue consumer for agent chat tasks, idempotent command creation, retry backoff, and DLQ publish
+- `internal/queue/publisher.go`: NATS publisher abstraction used by server + worker
+- `internal/queue/subscriber.go`: lightweight NATS subscriber with queue-group support
 
 ## Migration Strategy
 
-### v1.0.0 - Initial Deployment
+Migrations are additive and executed automatically on startup. Current line includes:
+- `001` agents
+- `002` commands
+- `003` users
+- `004` metrics
+- `005` OS/security fields
+- `006` governance
+- `007` chat messages
+- `008-010` schedules + command linkage
+- `011-012` OS patch policy + audit
+- `013` agent patch inventory
+- `014` agent issues + issue action audit
 
-Single consolidated migration creates complete schema:
-```
-Migration: 001_create_agents_table_v1_0_0
+## Current Priorities
 
-Creates:
-✓ agents table with all v1.0.0 fields
-✓ indexes for optimal query performance
-✓ schema_migrations tracking table
-
-All migrations run automatically on server startup.
-```
-
-### Benefits of Consolidated Migration
-
-1. **Clean Initial State** - No incremental ALTER TABLE operations
-2. **Consistent Deployments** - All instances start with identical schema
-3. **Simplified Migrations** - Single point of setup
-4. **Easier Backups** - Full schema in one operation
-
-## Version Roadmap
-
-```
-v1.0.0 (Current - Feb 2026)
-├─ Agent & Server architecture
-├─ System information collection
-├─ Hardware monitoring (Windows)
-├─ Storage monitoring (disks/drives)
-├─ Web UI (Overview, Hardware, Disks tabs)
-├─ Offline detection
-├─ PostgreSQL persistence
-└─ Automatic migrations
-
-v1.1.0 (Planned)
-├─ Commands from server → agent
-├─ Real-time data streaming (WebSocket)
-├─ Agent grouping/policies
-├─ Advanced monitoring (alerts, trends)
-├─ Linux/macOS hardware collection
-└─ Authentication & authorization
-
-v2.0.0 (Future)
-├─ Multi-tenant support
-├─ Agent plugins system
-├─ Distributed tracing
-├─ Event sourcing
-└─ Async command queue
-```
-
-## Next Development Priorities
-
-1. **Graceful Shutdown** - Complete offline checker shutdown
-2. **Command Execution** - Server → agent task execution
-3. **Real-time Streaming** - WebSocket support for live updates
-4. **Linux Support** - Hardware collection for Linux agents
-5. **Authentication** - JWT-based API security
+1. Add DLQ replay tooling and operational runbook
+2. Expand queue observability (retry/DLQ counters and alert thresholds)
+3. Reduce timeout-isolated chat fallbacks via tuned AI/tool execution budgets

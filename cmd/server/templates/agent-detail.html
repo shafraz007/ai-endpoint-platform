@@ -35,7 +35,8 @@
         }
 
         .container {
-            max-width: 900px;
+            width: 100%;
+            max-width: none;
             margin: 0 auto;
         }
 
@@ -373,6 +374,35 @@
             border-color: var(--accent);
         }
 
+        .notif-btn {
+            position: relative;
+            min-width: 42px;
+            text-align: center;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .notif-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5px;
+        }
+
+        .notif-badge.show {
+            display: inline-flex;
+        }
+
         .command-status {
             margin-top: 12px;
             font-size: 13px;
@@ -531,12 +561,50 @@
         }
 
         .chat-item {
-            border-bottom: 1px solid var(--line);
-            padding: 8px 0;
+            display: flex;
+            margin: 10px 0;
+            border-bottom: none;
+            padding: 0;
         }
 
-        .chat-item:last-child {
-            border-bottom: none;
+        .chat-item.mine {
+            justify-content: flex-end;
+        }
+
+        .chat-item.theirs {
+            justify-content: flex-start;
+        }
+
+        .chat-item.pending {
+            opacity: 0.8;
+        }
+
+        .chat-item.failed {
+            opacity: 0.95;
+        }
+
+        .chat-bubble {
+            max-width: min(75%, 760px);
+            border-radius: 14px;
+            padding: 9px 12px;
+            border: 1px solid var(--line);
+            background: #eef2f5;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        }
+
+        .chat-item.mine .chat-bubble {
+            background: var(--accent);
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .chat-item.mine .chat-meta,
+        .chat-item.mine .chat-delivery {
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .chat-item.failed .chat-bubble {
+            border-color: #b43c3c;
         }
 
         .chat-meta {
@@ -550,6 +618,62 @@
             font-size: 14px;
             white-space: pre-wrap;
             word-break: break-word;
+        }
+
+        .chat-delivery {
+            margin-top: 6px;
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .chat-live-indicator {
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .chat-live-indicator.ok {
+            color: #1c7c54;
+        }
+
+        .chat-live-indicator.warn {
+            color: #8a5a12;
+        }
+
+        .chat-typing {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--muted);
+            min-height: 16px;
+        }
+
+        .chat-jump-row {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .chat-new-link {
+            display: none;
+            font-size: 12px;
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .chat-new-link.show {
+            display: inline-block;
+        }
+
+        .chat-bottom-btn {
+            margin-left: auto;
         }
 
         .chat-compose {
@@ -579,6 +703,207 @@
 
         .chat-status.error {
             color: #b43c3c;
+        }
+
+        .chat-help {
+            margin-bottom: 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fbfcfd;
+            padding: 10px 12px;
+        }
+
+        .chat-help summary {
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .chat-help-content {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .patch-updates-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .patch-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fbfcfd;
+        }
+
+        .patch-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .patch-title {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .patch-tags {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .patch-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .issues-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .issues-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .issue-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fbfcfd;
+        }
+
+        .issue-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+
+        .issue-item-title {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .issue-item-meta {
+            color: var(--muted);
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .issue-item-desc {
+            color: var(--ink);
+            font-size: 13px;
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .issue-actions-wrap {
+            display: grid;
+            gap: 8px;
+        }
+
+        .issue-action-row {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px;
+            background: var(--surface);
+        }
+
+        .issue-action-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+
+        .issue-action-label {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .issue-action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .list-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .list-controls-left,
+        .list-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .limit-select {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            background: var(--surface);
+        }
+
+        .pager-btn {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--line);
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .pager-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pager-info {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .mini-btn {
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--surface);
+            color: var(--ink);
+        }
+
+        .mini-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         @media (max-width: 900px) {
@@ -629,10 +954,12 @@
             <button class="tab-button" onclick="switchTab('hardware', this)">🖥️ Hardware</button>
             <button class="tab-button" onclick="switchTab('disks', this)">💽 Disks</button>
             <button class="tab-button" onclick="switchTab('commands', this)">🧭 Commands</button>
-            <button class="tab-button" onclick="switchTab('chat', this)">💬 Personal Chat</button>
+            <button id="chat-tab-button" class="tab-button" onclick="switchTab('chat', this)">💬 Chat</button>
+            <button class="tab-button" onclick="switchTab('issues', this)">🚨 Issues</button>
             <button class="tab-button" onclick="switchTab('metrics', this)">📈 Metrics</button>
             <button class="tab-button" onclick="switchTab('os-security', this)">🛡️ OS & Security</button>
             <div class="tabs-actions">
+                <button id="agent-notif-button" class="ghost-btn notif-btn" type="button" title="Unread agent replies">🔔<span id="agent-notif-count" class="notif-badge">0</span></button>
                 <button id="logout-button" class="ghost-btn" type="button">Logout</button>
             </div>
         </div>
@@ -746,6 +1073,22 @@
                                 <button id="refresh-commands" class="ghost-btn" type="button">Refresh</button>
                             </div>
                         </div>
+                        <div class="list-controls">
+                            <div class="list-controls-left">
+                                <label for="commands-limit" class="pager-info">Per page</label>
+                                <select id="commands-limit" class="limit-select">
+                                    <option value="5">5</option>
+                                    <option value="10" selected>10</option>
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </div>
+                            <div class="list-controls-right">
+                                <button id="commands-prev" class="pager-btn" type="button">Prev</button>
+                                <span id="commands-page-info" class="pager-info">Page 1</span>
+                                <button id="commands-next" class="pager-btn" type="button">Next</button>
+                            </div>
+                        </div>
                         <div id="commands-empty" class="empty">No commands yet.</div>
                         <div id="commands-table" class="commands-table"></div>
                     </div>
@@ -755,16 +1098,66 @@
 
         <div id="chat" class="tab-content">
             <div class="info-section">
-                <h2>Personal Chat ({{.Agent.Hostname}})</h2>
+                <h2>You are chatting with {{.Agent.Hostname}} ...</h2>
                 <div class="chat-panel">
+                    <details class="chat-help">
+                        <summary>How to use chat</summary>
+                        <div class="chat-help-content">
+                            Ask naturally for conversation and health/status questions. For command actions, use <strong>cmd:</strong>, <strong>powershell:</strong>, or <strong>shell:</strong>; then the agent proposes first and waits for <strong>confirm</strong> or <strong>cancel</strong>.<br>
+                            Examples: <em>cmd: ping -n 4 8.8.8.8</em>, <em>powershell: Get-Date</em>, <em>shell: echo hello</em>.
+                        </div>
+                    </details>
+                    <div id="agent-chat-live-indicator" class="chat-live-indicator">Connecting live chat…</div>
                     <div id="agent-chat-list" class="chat-list">
                         <div class="empty">No messages yet.</div>
+                    </div>
+                    <div class="chat-jump-row">
+                        <button id="agent-chat-new-link" type="button" class="chat-new-link">New messages</button>
+                        <button id="agent-chat-bottom-btn" type="button" class="mini-btn chat-bottom-btn">Scroll to bottom</button>
                     </div>
                     <div class="chat-compose">
                         <textarea id="agent-chat-input" placeholder="Type a message for this agent thread..."></textarea>
                         <button id="agent-chat-send" class="primary-btn" type="button">Send</button>
                     </div>
+                    <div id="agent-chat-typing" class="chat-typing"></div>
                     <div id="agent-chat-status" class="chat-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="issues" class="tab-content">
+            <div class="info-section">
+                <h2>Issues and Actions</h2>
+                <div class="issues-toolbar">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <label for="issues-status-filter" style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Status</label>
+                        <select id="issues-status-filter" style="max-width:180px;">
+                            <option value="active" selected>Active</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <button id="refresh-issues" class="ghost-btn" type="button">Refresh</button>
+                </div>
+                <div class="list-controls">
+                    <div class="list-controls-left">
+                        <label for="issues-limit" class="pager-info">Issues per page</label>
+                        <select id="issues-limit" class="limit-select">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="list-controls-right">
+                        <button id="issues-prev" class="pager-btn" type="button">Prev</button>
+                        <span id="issues-page-info" class="pager-info">Page 1</span>
+                        <button id="issues-next" class="pager-btn" type="button">Next</button>
+                    </div>
+                </div>
+                <div id="issues-status" class="command-status"></div>
+                <div id="issues-list" class="issues-grid">
+                    <div class="empty">No issues loaded yet.</div>
                 </div>
             </div>
         </div>
@@ -885,6 +1278,63 @@
                     </div>
                 </div>
             </div>
+
+            <div class="info-section">
+                <h2>Patch Inventory</h2>
+                <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+                    <button id="install-approved-updates" class="primary-btn" type="button">Install Approved Now</button>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Reboot Required</div>
+                    <div class="info-value">
+                        {{if .Agent.RebootRequired}}
+                            <span style="color:#e74c3c;font-weight:600;">Yes</span>
+                        {{else}}
+                            <span style="color:#2ecc71;font-weight:600;">No</span>
+                        {{end}}
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Reboot Action</div>
+                    <div class="info-value" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <button id="reboot-now-button" class="primary-btn" type="button">Reboot Now</button>
+                        <input id="reboot-schedule-at" type="datetime-local" style="max-width:230px;" />
+                        <button id="reboot-schedule-button" class="ghost-btn" type="button">Schedule Reboot</button>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Last Patch Scan</div>
+                    <div class="info-value">
+                        {{if .Agent.PatchScanAt}}<span class="timestamp">{{.Agent.PatchScanAt.Format "2006-01-02 15:04:05"}}</span>{{else}}<span class="empty">Not scanned yet</span>{{end}}
+                    </div>
+                </div>
+                <div id="patch-updates-status" class="command-status"></div>
+                <div class="list-controls">
+                    <div class="list-controls-left">
+                        <label for="patch-status-filter" class="pager-info">View</label>
+                        <select id="patch-status-filter" class="limit-select">
+                            <option value="all" selected>All updates</option>
+                            <option value="pending">Pending only</option>
+                            <option value="installed">Installed only</option>
+                        </select>
+                        <label for="patch-limit" class="pager-info">Updates per page</label>
+                        <select id="patch-limit" class="limit-select">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="list-controls-right">
+                        <button id="patch-prev" class="pager-btn" type="button">Prev</button>
+                        <span id="patch-page-info" class="pager-info">Page 1</span>
+                        <button id="patch-next" class="pager-btn" type="button">Next</button>
+                    </div>
+                </div>
+                <div id="patch-updates-list" class="patch-updates-grid">
+                    <div class="empty">No patch inventory items detected.</div>
+                </div>
+            </div>
         </div>
 
         <!-- Hardware Tab Content -->
@@ -972,6 +1422,24 @@
         const disksData = JSON.parse(document.getElementById('disks-json').textContent || '[]');
         const drivesData = JSON.parse(document.getElementById('drives-json').textContent || '[]');
         const agentId = "{{.Agent.AgentID}}";
+        const agentChatLastSeenStorageKey = 'agentChatLastSeenMessageId:' + agentId;
+        let latestAgentMessages = [];
+        let optimisticAgentMessages = [];
+        let agentPendingReplyAfterMessageID = 0;
+        let agentChatEventSource = null;
+        let agentChatInitialScrollDone = false;
+        let agentUnseenMessageCount = 0;
+        let agentFirstUnseenMessageID = 0;
+        let latestCommands = [];
+        let latestPatchUpdates = [];
+        let latestIssues = [];
+
+        const pagination = {
+            commands: { page: 1, limit: 10, total: 0 },
+            chat: { page: 1, limit: 25, total: 0 },
+            patch: { page: 1, limit: 10, total: 0 },
+            issues: { page: 1, limit: 10, total: 0 },
+        };
         
         function switchTab(tabName, btn) {
             // Hide all tab contents
@@ -994,6 +1462,10 @@
 
             // Add active class to clicked button
             if (btn) btn.classList.add('active');
+
+            if (tabName === 'chat') {
+                markAgentNotificationsAsRead();
+            }
         }
         function setCommandStatus(message, type) {
             const statusEl = document.getElementById('command-status');
@@ -1009,6 +1481,64 @@
             statusEl.className = 'chat-status' + (type ? ' ' + type : '');
         }
 
+        function setAgentChatLiveIndicator(message, type) {
+            const indicator = document.getElementById('agent-chat-live-indicator');
+            if (!indicator) return;
+            indicator.textContent = message || '';
+            indicator.className = 'chat-live-indicator' + (type ? ' ' + type : '');
+        }
+
+        function setAgentTypingIndicator(visible, message) {
+            const typingEl = document.getElementById('agent-chat-typing');
+            if (!typingEl) return;
+            typingEl.textContent = visible ? (message || 'Agent is thinking…') : '';
+        }
+
+        function setPatchStatus(message, type) {
+            const statusEl = document.getElementById('patch-updates-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'command-status' + (type ? ' ' + type : '');
+        }
+
+        function setIssuesStatus(message, type) {
+            const statusEl = document.getElementById('issues-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'command-status' + (type ? ' ' + type : '');
+        }
+
+        function paginateArray(items, page, limit) {
+            const safeItems = Array.isArray(items) ? items : [];
+            const safeLimit = Math.max(1, Number(limit) || 1);
+            const total = safeItems.length;
+            const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+            const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+            const start = (currentPage - 1) * safeLimit;
+            const paged = safeItems.slice(start, start + safeLimit);
+            return { paged, total, totalPages, currentPage };
+        }
+
+        function updatePagerControls(prefix, state) {
+            const info = document.getElementById(prefix + '-page-info');
+            const prev = document.getElementById(prefix + '-prev');
+            const next = document.getElementById(prefix + '-next');
+            if (info) {
+                info.textContent = `Page ${state.page} / ${state.totalPages} • ${state.total} item(s)`;
+            }
+            if (prev) prev.disabled = state.page <= 1;
+            if (next) next.disabled = state.page >= state.totalPages;
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         async function logoutAdmin() {
             await fetch('/admin/logout', { method: 'POST' });
         }
@@ -1020,19 +1550,193 @@
             return date.toLocaleString();
         }
 
-        function renderAgentChat(messages) {
+        function isChatNearBottom(listEl) {
+            if (!listEl) return true;
+            const threshold = 48;
+            const distanceFromBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+            return distanceFromBottom <= threshold;
+        }
+
+        function extractExplicitCommandsFromMessage(message) {
+            if (!message) return [];
+
+            const commands = [];
+            const seen = new Set();
+
+            function addCommand(candidate) {
+                if (!candidate) return;
+                const cleaned = String(candidate).trim().replace(/^`+|`+$/g, '').trim();
+                const match = cleaned.match(/^(cmd|powershell|shell)\s*:\s*(.+)$/i);
+                if (!match) return;
+
+                const commandBody = (match[2] || '').trim();
+                if (!commandBody) return;
+
+                const normalized = `${String(match[1]).toLowerCase()}: ${commandBody}`;
+                if (seen.has(normalized)) return;
+                seen.add(normalized);
+                commands.push(normalized);
+            }
+
+            String(message).split(/\r?\n/).forEach((line) => addCommand(line));
+
+            const inlineCodeRegex = /`((?:cmd|powershell|shell)\s*:[^`]+)`/ig;
+            let codeMatch;
+            while ((codeMatch = inlineCodeRegex.exec(String(message))) !== null) {
+                addCommand(codeMatch[1]);
+            }
+
+            return commands;
+        }
+
+        function copyCommandToAgentInput(commandText) {
+            const input = document.getElementById('agent-chat-input');
+            if (!input) return;
+
+            input.value = commandText;
+            input.focus();
+            if (typeof input.setSelectionRange === 'function') {
+                input.setSelectionRange(input.value.length, input.value.length);
+            }
+
+            setAgentChatStatus('Command copied to input box. Review and send when ready.', 'ok');
+        }
+
+        function normalizeChatID(value) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : 0;
+        }
+
+        function sortChatMessages(messages) {
+            return (Array.isArray(messages) ? messages.slice() : []).sort((a, b) => {
+                const aID = normalizeChatID(a && a.id);
+                const bID = normalizeChatID(b && b.id);
+                if (aID && bID && aID !== bID) {
+                    return aID - bID;
+                }
+                const aTime = new Date((a && a.created_at) || 0).getTime() || 0;
+                const bTime = new Date((b && b.created_at) || 0).getTime() || 0;
+                return aTime - bTime;
+            });
+        }
+
+        function getRenderedAgentMessages() {
+            return sortChatMessages([...(latestAgentMessages || []), ...(optimisticAgentMessages || [])]);
+        }
+
+        function upsertAgentChatMessage(message) {
+            if (!message) return false;
+            const targetID = normalizeChatID(message.id);
+            if (!targetID) return false;
+
+            const existingIndex = latestAgentMessages.findIndex((item) => normalizeChatID(item && item.id) === targetID);
+            if (existingIndex >= 0) {
+                latestAgentMessages[existingIndex] = message;
+                return false;
+            }
+
+            latestAgentMessages.push(message);
+            latestAgentMessages = sortChatMessages(latestAgentMessages);
+            return true;
+        }
+
+        function removeOptimisticMessage(tempID) {
+            optimisticAgentMessages = optimisticAgentMessages.filter((item) => String(item.id) !== String(tempID));
+        }
+
+        function normalizeAgentDisplayMessage(message) {
+            let text = String(message || '').trim();
+            if (!text) return '';
+
+            text = text.replace(/^Agent response\s*\n?/i, '').trim();
+
+            const progressPrefix = 'Working on your request...';
+            if (text.toLowerCase().startsWith(progressPrefix.toLowerCase())) {
+                const remainder = text.slice(progressPrefix.length).trim();
+                if (remainder) {
+                    let quoted = remainder.replace(/^"+|"+$/g, '');
+                    quoted = '"' + quoted + '"';
+                    return progressPrefix + '\n' + quoted;
+                }
+                return progressPrefix;
+            }
+
+            return text;
+        }
+
+        function updateAgentChatJumpControls() {
+            const link = document.getElementById('agent-chat-new-link');
+            if (!link) return;
+            const show = agentUnseenMessageCount > 0;
+            link.classList.toggle('show', show);
+            link.textContent = show
+                ? `New message${agentUnseenMessageCount > 1 ? 's' : ''} (${agentUnseenMessageCount})`
+                : 'New messages';
+        }
+
+        function clearAgentUnreadJumpState() {
+            agentUnseenMessageCount = 0;
+            agentFirstUnseenMessageID = 0;
+            updateAgentChatJumpControls();
+        }
+
+        function scrollAgentChatToBottom() {
+            const listEl = document.getElementById('agent-chat-list');
+            if (!listEl) return;
+            listEl.scrollTop = listEl.scrollHeight;
+            clearAgentUnreadJumpState();
+        }
+
+        function scrollAgentChatToFirstNewMessage() {
             const listEl = document.getElementById('agent-chat-list');
             if (!listEl) return;
 
-            if (!messages || messages.length === 0) {
+            if (agentFirstUnseenMessageID > 0) {
+                const target = listEl.querySelector(`.chat-item[data-message-id="${agentFirstUnseenMessageID}"]`);
+                if (target && typeof target.scrollIntoView === 'function') {
+                    target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            }
+
+            clearAgentUnreadJumpState();
+        }
+
+        function renderAgentChat(messages, forceScrollToBottom = false) {
+            const listEl = document.getElementById('agent-chat-list');
+            if (!listEl) return;
+
+            const previousMaxID = latestAgentMessages.reduce((max, item) => Math.max(max, normalizeChatID(item && item.id)), 0);
+
+            latestAgentMessages = sortChatMessages(Array.isArray(messages) ? messages : []);
+            const combinedMessages = getRenderedAgentMessages();
+            updateAgentNotificationBadge(latestAgentMessages);
+
+            const previousBottomOffset = listEl.scrollHeight - listEl.scrollTop;
+            const nearBottom = isChatNearBottom(listEl);
+            const shouldStickToBottom = forceScrollToBottom || !agentChatInitialScrollDone || nearBottom;
+
+            if (!combinedMessages || combinedMessages.length === 0) {
                 listEl.innerHTML = '<div class="empty">No messages yet.</div>';
+                clearAgentUnreadJumpState();
                 return;
             }
 
             listEl.innerHTML = '';
-            messages.forEach((item) => {
+            combinedMessages.forEach((item) => {
                 const row = document.createElement('div');
-                row.className = 'chat-item';
+                const sender = String(item.sender || '').toLowerCase();
+                const localState = String(item._localState || '').toLowerCase();
+                const mine = sender === 'admin';
+                const sideClass = mine ? 'mine' : 'theirs';
+                row.className = 'chat-item ' + sideClass + (localState ? (' ' + localState) : '');
+
+                const messageID = normalizeChatID(item && item.id);
+                if (messageID > 0) {
+                    row.setAttribute('data-message-id', String(messageID));
+                }
+
+                const bubble = document.createElement('div');
+                bubble.className = 'chat-bubble';
 
                 const meta = document.createElement('div');
                 meta.className = 'chat-meta';
@@ -1040,17 +1744,118 @@
 
                 const text = document.createElement('div');
                 text.className = 'chat-text';
-                text.textContent = item.message;
+                const displayMessage = normalizeAgentDisplayMessage(item.message);
+                text.textContent = displayMessage;
 
-                row.appendChild(meta);
-                row.appendChild(text);
+                bubble.appendChild(meta);
+                bubble.appendChild(text);
+
+                if (sender.startsWith('agent:')) {
+                    const commands = extractExplicitCommandsFromMessage(displayMessage || '');
+                    if (commands.length > 0) {
+                        const commandList = document.createElement('div');
+                        commandList.style.display = 'grid';
+                        commandList.style.gap = '6px';
+                        commandList.style.marginTop = '8px';
+
+                        commands.forEach((commandText) => {
+                            const commandRow = document.createElement('div');
+                            commandRow.style.display = 'flex';
+                            commandRow.style.alignItems = 'center';
+                            commandRow.style.justifyContent = 'space-between';
+                            commandRow.style.gap = '8px';
+
+                            const commandValue = document.createElement('code');
+                            commandValue.textContent = commandText;
+
+                            const copyButton = document.createElement('button');
+                            copyButton.type = 'button';
+                            copyButton.className = 'mini-btn';
+                            copyButton.textContent = 'Copy';
+                            copyButton.addEventListener('click', () => copyCommandToAgentInput(commandText));
+
+                            commandRow.appendChild(commandValue);
+                            commandRow.appendChild(copyButton);
+                            commandList.appendChild(commandRow);
+                        });
+
+                        bubble.appendChild(commandList);
+                    }
+                }
+
+                if (localState) {
+                    const delivery = document.createElement('div');
+                    delivery.className = 'chat-delivery';
+                    delivery.textContent = localState === 'sending' ? 'Sending…' : (localState === 'failed' ? 'Failed to send' : localState);
+                    bubble.appendChild(delivery);
+                }
+
+                row.appendChild(bubble);
+
                 listEl.appendChild(row);
             });
 
-            listEl.scrollTop = listEl.scrollHeight;
+            if (shouldStickToBottom) {
+                listEl.scrollTop = listEl.scrollHeight;
+                clearAgentUnreadJumpState();
+            } else {
+                listEl.scrollTop = Math.max(0, listEl.scrollHeight - previousBottomOffset);
+
+                const newPersistedMessages = latestAgentMessages.filter((item) => normalizeChatID(item && item.id) > previousMaxID);
+                if (newPersistedMessages.length > 0) {
+                    if (agentFirstUnseenMessageID <= 0) {
+                        agentFirstUnseenMessageID = normalizeChatID(newPersistedMessages[0] && newPersistedMessages[0].id);
+                    }
+                    agentUnseenMessageCount += newPersistedMessages.length;
+                    updateAgentChatJumpControls();
+                }
+            }
+
+            agentChatInitialScrollDone = true;
+
+            if (agentPendingReplyAfterMessageID > 0) {
+                const hasAgentReply = latestAgentMessages.some((item) => {
+                    const id = normalizeChatID(item && item.id);
+                    return id > agentPendingReplyAfterMessageID && String(item && item.sender || '').toLowerCase().startsWith('agent:');
+                });
+                if (hasAgentReply) {
+                    agentPendingReplyAfterMessageID = 0;
+                    setAgentTypingIndicator(false);
+                }
+            }
         }
 
-        async function loadAgentChat() {
+        function getAgentLastSeenMessageId() {
+            const raw = localStorage.getItem(agentChatLastSeenStorageKey);
+            const parsed = Number(raw);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function setAgentLastSeenMessageId(id) {
+            localStorage.setItem(agentChatLastSeenStorageKey, String(id || 0));
+        }
+
+        function updateAgentNotificationBadge(messages) {
+            const badge = document.getElementById('agent-notif-count');
+            if (!badge || !Array.isArray(messages)) return;
+
+            const lastSeenId = getAgentLastSeenMessageId();
+            const unread = messages.filter((item) => (item && normalizeChatID(item.id) > lastSeenId && String(item.sender || '').startsWith('agent:'))).length;
+            badge.textContent = String(unread);
+            badge.classList.toggle('show', unread > 0);
+        }
+
+        function markAgentNotificationsAsRead() {
+            if (!Array.isArray(latestAgentMessages) || latestAgentMessages.length === 0) {
+                updateAgentNotificationBadge([]);
+                return;
+            }
+            const maxId = latestAgentMessages.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+            setAgentLastSeenMessageId(maxId);
+            updateAgentNotificationBadge(latestAgentMessages);
+        }
+
+        async function loadAgentChat(forceScrollToBottom = false) {
             try {
                 const response = await fetch('/api/chat/messages?scope=agent&agent_id=' + encodeURIComponent(agentId) + '&limit=100', {
                     credentials: 'same-origin',
@@ -1064,9 +1869,62 @@
                 }
 
                 const data = await response.json();
-                renderAgentChat(data);
+                if (agentPendingReplyAfterMessageID > 0) {
+                    const hasAgentReply = (Array.isArray(data) ? data : []).some((item) => {
+                        return normalizeChatID(item && item.id) > agentPendingReplyAfterMessageID && String(item && item.sender || '').toLowerCase().startsWith('agent:');
+                    });
+                    if (hasAgentReply) {
+                        agentPendingReplyAfterMessageID = 0;
+                        setAgentTypingIndicator(false);
+                    }
+                }
+                renderAgentChat(data, forceScrollToBottom);
             } catch (err) {
                 setAgentChatStatus(err.message || 'Failed to load personal chat.', 'error');
+            }
+        }
+
+        function getLatestPersistedAgentMessageID() {
+            return (latestAgentMessages || []).reduce((max, item) => Math.max(max, normalizeChatID(item && item.id)), 0);
+        }
+
+        function startAgentChatStream() {
+            try {
+                if (agentChatEventSource) {
+                    agentChatEventSource.close();
+                }
+
+                const sinceID = getLatestPersistedAgentMessageID();
+                const streamURL = '/api/chat/stream?scope=agent&agent_id=' + encodeURIComponent(agentId) + '&since_id=' + encodeURIComponent(String(sinceID));
+                const source = new EventSource(streamURL, { withCredentials: true });
+                agentChatEventSource = source;
+
+                source.onopen = () => {
+                    setAgentChatLiveIndicator('Live updates connected.', 'ok');
+                };
+
+                source.onmessage = (event) => {
+                    try {
+                        const item = JSON.parse(event.data);
+                        const inserted = upsertAgentChatMessage(item);
+                        if (!inserted) return;
+
+                        if (agentPendingReplyAfterMessageID > 0 && String(item.sender || '').toLowerCase().startsWith('agent:') && normalizeChatID(item.id) > agentPendingReplyAfterMessageID) {
+                            agentPendingReplyAfterMessageID = 0;
+                            setAgentTypingIndicator(false);
+                        }
+
+                        renderAgentChat(latestAgentMessages, false);
+                    } catch (err) {
+                        console.warn('chat stream parse error', err);
+                    }
+                };
+
+                source.onerror = () => {
+                    setAgentChatLiveIndicator('Live updates disconnected; using polling fallback.', 'warn');
+                };
+            } catch (err) {
+                setAgentChatLiveIndicator('Live updates unavailable; using polling fallback.', 'warn');
             }
         }
 
@@ -1078,6 +1936,19 @@
                 setAgentChatStatus('Message is required.', 'error');
                 return;
             }
+
+            const temporaryID = 'tmp-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
+            optimisticAgentMessages.push({
+                id: temporaryID,
+                scope: 'agent',
+                agent_id: agentId,
+                sender: 'admin',
+                message: message,
+                created_at: new Date().toISOString(),
+                _localState: 'sending',
+            });
+            renderAgentChat(latestAgentMessages, true);
+            setAgentTypingIndicator(true, 'Agent is thinking…');
 
             try {
                 const response = await fetch('/api/chat/messages', {
@@ -1101,10 +1972,21 @@
                     throw new Error('Agent chat send failed: ' + response.status);
                 }
 
+                const created = await response.json();
+                removeOptimisticMessage(temporaryID);
+                upsertAgentChatMessage(created);
+                agentPendingReplyAfterMessageID = Math.max(agentPendingReplyAfterMessageID, normalizeChatID(created && created.id));
+
                 input.value = '';
                 setAgentChatStatus('Message sent.', 'ok');
-                await loadAgentChat();
+                renderAgentChat(latestAgentMessages, true);
             } catch (err) {
+                optimisticAgentMessages = optimisticAgentMessages.map((item) => {
+                    if (String(item.id) !== String(temporaryID)) return item;
+                    return { ...item, _localState: 'failed' };
+                });
+                setAgentTypingIndicator(false);
+                renderAgentChat(latestAgentMessages, true);
                 setAgentChatStatus(err.message || 'Failed to send personal chat message.', 'error');
             }
         }
@@ -1114,14 +1996,22 @@
             const tableEl = document.getElementById('commands-table');
             if (!tableEl || !emptyEl) return;
 
+            latestCommands = Array.isArray(commands) ? commands : [];
+
+            const result = paginateArray(latestCommands, pagination.commands.page, pagination.commands.limit);
+            pagination.commands.page = result.currentPage;
+            pagination.commands.total = result.total;
+            pagination.commands.totalPages = result.totalPages;
+            updatePagerControls('commands', pagination.commands);
+
             tableEl.innerHTML = '';
-            if (!commands || commands.length === 0) {
+            if (!result.paged || result.paged.length === 0) {
                 emptyEl.style.display = 'block';
                 return;
             }
 
             emptyEl.style.display = 'none';
-            commands.forEach(command => {
+            result.paged.forEach(command => {
                 const card = document.createElement('div');
                 card.className = 'command-card';
 
@@ -1174,7 +2064,8 @@
 
         async function loadCommands() {
             try {
-                const response = await fetch('/api/commands?agent_id=' + encodeURIComponent(agentId) + '&limit=20', {
+                const fetchLimit = Math.max(50, pagination.commands.limit * 8);
+                const response = await fetch('/api/commands?agent_id=' + encodeURIComponent(agentId) + '&limit=' + encodeURIComponent(String(fetchLimit)), {
                     credentials: 'same-origin',
                 });
 
@@ -1246,6 +2137,622 @@
             if (!typeInput || !payloadRow) return;
             const hidePayload = ['ping', 'restart', 'shutdown'].includes(typeInput.value);
             payloadRow.style.display = hidePayload ? 'none' : 'block';
+        }
+
+        function renderPatchUpdates(items) {
+            const listEl = document.getElementById('patch-updates-list');
+            if (!listEl) return;
+
+            const statusFilterEl = document.getElementById('patch-status-filter');
+            const statusFilter = String(statusFilterEl ? statusFilterEl.value : 'all').toLowerCase();
+
+            latestPatchUpdates = Array.isArray(items) ? items : [];
+            const result = paginateArray(latestPatchUpdates, pagination.patch.page, pagination.patch.limit);
+            pagination.patch.page = result.currentPage;
+            pagination.patch.total = result.total;
+            pagination.patch.totalPages = result.totalPages;
+            updatePagerControls('patch', pagination.patch);
+
+            if (!result.paged || result.paged.length === 0) {
+                if (statusFilter === 'installed') {
+                    listEl.innerHTML = '<div class="empty">No installed updates found in inventory.</div>';
+                } else if (statusFilter === 'pending') {
+                    listEl.innerHTML = '<div class="empty">No pending updates detected.</div>';
+                } else {
+                    listEl.innerHTML = '<div class="empty">No patch inventory items detected.</div>';
+                }
+                return;
+            }
+
+            const rows = result.paged.map((item) => {
+                const tags = [];
+                if (item.kb_id) tags.push(item.kb_id);
+                if (item.severity) tags.push(item.severity);
+                if (item.is_critical) tags.push('Critical');
+                if (item.is_security) tags.push('Security');
+                if (item.is_driver) tags.push('Driver');
+                if (item.is_os) tags.push('OS');
+                if (item.is_software) tags.push('Software');
+                if (item.installed) tags.push('Installed');
+                if (Array.isArray(item.categories) && item.categories.length > 0) {
+                    tags.push(item.categories.join(', '));
+                }
+
+                const kb = item.kb_id ? escapeHtml(item.kb_id) : '';
+                let actions = '';
+                if (item.installed) {
+                    if (kb && item.uninstallable) {
+                        actions = `<div class="patch-actions">
+                            <button class="mini-btn" data-action="uninstall" data-kb="${kb}">Uninstall</button>
+                        </div>`;
+                    } else {
+                        actions = '<div class="patch-actions"><span class="empty">Not uninstallable from agent workflow.</span></div>';
+                    }
+                } else {
+                    actions = kb
+                        ? `<div class="patch-actions">
+                            <button class="mini-btn" data-action="approve" data-kb="${kb}">Approve</button>
+                            <button class="mini-btn" data-action="postpone" data-kb="${kb}">Postpone</button>
+                            <button class="mini-btn" data-action="clear" data-kb="${kb}">Clear</button>
+                        </div>`
+                        : '<div class="patch-actions"><span class="empty">KB ID unavailable for override.</span></div>';
+                }
+
+                const statusBadge = item.installed
+                    ? '<span class="command-badge badge-succeeded">installed</span>'
+                    : `<span class="command-badge badge-dispatched">${escapeHtml(item.approval_state || 'pending_manual')}</span>`;
+
+                const installedMeta = item.installed && item.installed_at
+                    ? `<div class="patch-tags">Installed: ${escapeHtml(formatTimestamp(item.installed_at))}</div>`
+                    : '';
+
+                return `<div class="patch-item">
+                    <div class="patch-item-header">
+                        <div class="patch-title">${escapeHtml(item.title || 'Untitled update')}</div>
+                        ${statusBadge}
+                    </div>
+                    <div class="patch-tags">${escapeHtml(tags.join(' • '))}</div>
+                    ${installedMeta}
+                    ${actions}
+                </div>`;
+            });
+
+            listEl.innerHTML = rows.join('');
+
+            listEl.querySelectorAll('button[data-action]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const kb = btn.getAttribute('data-kb') || '';
+                    const action = btn.getAttribute('data-action') || '';
+                    if (action === 'uninstall') {
+                        await uninstallPatchUpdate(kb);
+                        return;
+                    }
+                    await applyPatchAction(kb, action);
+                });
+            });
+        }
+
+        async function loadPatchUpdates() {
+            const statusFilterEl = document.getElementById('patch-status-filter');
+            const statusFilter = String(statusFilterEl ? statusFilterEl.value : 'all').trim().toLowerCase();
+            try {
+                const params = new URLSearchParams();
+                params.set('status', statusFilter || 'all');
+
+                const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/patch-updates?' + params.toString(), {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Patch update list failed: ' + response.status);
+                }
+                const data = await response.json();
+                renderPatchUpdates(data);
+                setPatchStatus('Patch inventory loaded (' + (statusFilter || 'all') + ').', 'ok');
+            } catch (err) {
+                setPatchStatus(err.message || 'Failed to load patch inventory.', 'error');
+            }
+        }
+
+        function renderIssues(items) {
+            const listEl = document.getElementById('issues-list');
+            if (!listEl) return;
+
+            latestIssues = Array.isArray(items) ? items : [];
+
+            const result = paginateArray(latestIssues, pagination.issues.page, pagination.issues.limit);
+            pagination.issues.page = result.currentPage;
+            pagination.issues.total = result.total;
+            pagination.issues.totalPages = result.totalPages;
+            updatePagerControls('issues', pagination.issues);
+
+            if (!result.paged || result.paged.length === 0) {
+                listEl.innerHTML = '<div class="empty">No issues found for current filter.</div>';
+                return;
+            }
+
+            const rows = result.paged.map((item) => {
+                const severity = escapeHtml((item.severity || 'medium').toLowerCase());
+                const status = escapeHtml((item.status || 'active').toLowerCase());
+                const suppressed = !!item.suppressed;
+                const snoozedUntil = item.snoozed_until ? new Date(item.snoozed_until) : null;
+                const snoozedActive = !suppressed && snoozedUntil && !Number.isNaN(snoozedUntil.getTime()) && snoozedUntil.getTime() > Date.now();
+                const effectiveStatus = suppressed ? 'suppressed' : (snoozedActive ? 'snoozed' : status);
+                const title = escapeHtml(item.title || item.issue_key || 'Issue');
+                const description = escapeHtml(item.description || '');
+                const key = escapeHtml(item.issue_key || '-');
+                const updated = formatTimestamp(item.updated_at || item.last_seen_at || item.created_at);
+                const actions = Array.isArray(item.recommended_actions) ? item.recommended_actions : [];
+
+                const actionsHtml = actions.length === 0
+                    ? '<div class="empty">No recommended actions.</div>'
+                    : actions.map((action) => {
+                        const actionId = escapeHtml(action.id || '');
+                        const actionLabel = escapeHtml(action.label || action.id || 'Action');
+                        const actionKind = escapeHtml(action.kind || 'command');
+                        const supportsSchedule = !!action.supports_schedule;
+                        return `<div class="issue-action-row">
+                            <div class="issue-action-head">
+                                <div class="issue-action-label">${actionLabel}</div>
+                                <span class="command-badge badge-dispatched">${actionKind}</span>
+                            </div>
+                            <div class="issue-action-buttons">
+                                <button class="mini-btn" data-issue-id="${item.id}" data-action-id="${actionId}" data-mode="run_now">Run Now</button>
+                                ${supportsSchedule ? `<button class="mini-btn" data-issue-id="${item.id}" data-action-id="${actionId}" data-mode="schedule">Schedule</button>` : ''}
+                            </div>
+                        </div>`;
+                    }).join('');
+
+                const resolveButtonHtml = status !== 'resolved' && !suppressed
+                    ? `<div class="issue-action-row">
+                            <div class="issue-action-head">
+                                <div class="issue-action-label">Manual Issue Control</div>
+                                <span class="command-badge badge-succeeded">resolve</span>
+                            </div>
+                            <div class="issue-action-buttons">
+                                <button class="mini-btn" data-issue-resolve="${item.id}">Mark Resolved</button>
+                                <button class="mini-btn" data-issue-snooze="${item.id}">Snooze</button>
+                                <button class="mini-btn" data-issue-suppress="${item.id}">Suppress</button>
+                            </div>
+                        </div>`
+                    : '';
+
+                const muteMeta = suppressed
+                    ? ' • Suppressed permanently'
+                    : (snoozedActive ? ` • Snoozed until ${escapeHtml(formatTimestamp(item.snoozed_until))}` : '');
+
+                return `<div class="issue-item">
+                    <div class="issue-item-header">
+                        <div class="issue-item-title">${title}</div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span class="command-badge badge-${severity === 'high' || severity === 'critical' ? 'failed' : 'dispatched'}">${severity}</span>
+                            <span class="command-badge badge-${(suppressed || snoozedActive || status === 'resolved') ? 'succeeded' : 'queued'}">${effectiveStatus}</span>
+                        </div>
+                    </div>
+                    <div class="issue-item-meta">Key: ${key} • Updated: ${escapeHtml(updated)}${muteMeta}</div>
+                    <div class="issue-item-desc">${description}</div>
+                    <div class="issue-actions-wrap">${actionsHtml}${resolveButtonHtml}</div>
+                </div>`;
+            });
+
+            listEl.innerHTML = rows.join('');
+
+            listEl.querySelectorAll('button[data-action-id]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-id'));
+                    const actionId = btn.getAttribute('data-action-id') || '';
+                    const mode = btn.getAttribute('data-mode') || 'run_now';
+                    await executeIssueAction(issueId, actionId, mode);
+                });
+            });
+
+            listEl.querySelectorAll('button[data-issue-resolve]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-resolve'));
+                    await resolveIssue(issueId);
+                });
+            });
+
+            listEl.querySelectorAll('button[data-issue-snooze]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-snooze'));
+                    await snoozeIssue(issueId);
+                });
+            });
+
+            listEl.querySelectorAll('button[data-issue-suppress]').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const issueId = Number(btn.getAttribute('data-issue-suppress'));
+                    await suppressIssue(issueId);
+                });
+            });
+        }
+
+        async function executeIssueAction(issueId, actionId, mode) {
+            if (!issueId || !actionId) {
+                setIssuesStatus('Issue/action is missing.', 'error');
+                return;
+            }
+
+            const body = {
+                action_id: actionId,
+                mode: mode,
+            };
+
+            if (mode === 'schedule') {
+                const localValue = prompt('Enter schedule time (local) as YYYY-MM-DDTHH:mm', '');
+                if (localValue === null) {
+                    return;
+                }
+                const runAt = toRFC3339FromLocalInput(localValue.trim());
+                if (!runAt) {
+                    setIssuesStatus('Invalid schedule time format.', 'error');
+                    return;
+                }
+                body.run_at = runAt;
+                body.enabled = true;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body),
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue action failed: ' + response.status));
+                }
+                const result = await response.json();
+                setIssuesStatus(result.message || 'Issue action executed.', 'ok');
+                await loadIssues();
+                await loadCommands();
+            } catch (err) {
+                setIssuesStatus(err.message || 'Failed to execute issue action.', 'error');
+            }
+        }
+
+        async function resolveIssue(issueId) {
+            if (!issueId) {
+                setIssuesStatus('Issue is missing.', 'error');
+                return;
+            }
+
+            const confirmed = confirm('Mark this issue as resolved?');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/resolve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue resolve failed: ' + response.status));
+                }
+                const result = await response.json();
+                setIssuesStatus(result.message || 'Issue marked as resolved.', 'ok');
+                await loadIssues();
+            } catch (err) {
+                setIssuesStatus(err.message || 'Failed to mark issue resolved.', 'error');
+            }
+        }
+
+        async function snoozeIssue(issueId) {
+            if (!issueId) {
+                setIssuesStatus('Issue is missing.', 'error');
+                return;
+            }
+
+            const raw = prompt('Snooze this issue for how many minutes?', '120');
+            if (raw === null) {
+                return;
+            }
+
+            const minutes = Number((raw || '').trim());
+            if (!Number.isFinite(minutes) || minutes <= 0) {
+                setIssuesStatus('Invalid snooze duration.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/snooze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ minutes: Math.floor(minutes) }),
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue snooze failed: ' + response.status));
+                }
+                const result = await response.json();
+                setIssuesStatus(result.message || 'Issue snoozed.', 'ok');
+                await loadIssues();
+            } catch (err) {
+                setIssuesStatus(err.message || 'Failed to snooze issue.', 'error');
+            }
+        }
+
+        async function suppressIssue(issueId) {
+            if (!issueId) {
+                setIssuesStatus('Issue is missing.', 'error');
+                return;
+            }
+
+            const confirmed = confirm('Suppress this issue permanently for this agent? It will not alert again unless unsuppressed in DB.');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/issues/' + encodeURIComponent(issueId) + '/suppress', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Issue suppress failed: ' + response.status));
+                }
+                const result = await response.json();
+                setIssuesStatus(result.message || 'Issue suppressed.', 'ok');
+                await loadIssues();
+            } catch (err) {
+                setIssuesStatus(err.message || 'Failed to suppress issue.', 'error');
+            }
+        }
+
+        async function loadIssues() {
+            const statusFilter = document.getElementById('issues-status-filter');
+            const status = statusFilter ? String(statusFilter.value || '').trim() : 'active';
+            const params = new URLSearchParams();
+            params.set('agent_id', agentId);
+            params.set('limit', String(Math.max(100, pagination.issues.limit * 8)));
+            if (status) {
+                params.set('status', status);
+            }
+
+            try {
+                const response = await fetch('/api/issues?' + params.toString(), {
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Issue list failed: ' + response.status);
+                }
+                const data = await response.json();
+                renderIssues(data);
+                setIssuesStatus('Issues refreshed.', 'ok');
+            } catch (err) {
+                setIssuesStatus(err.message || 'Failed to load issues.', 'error');
+            }
+        }
+
+        async function applyPatchAction(kb, action) {
+            if (!kb) {
+                setPatchStatus('KB ID is required for this action.', 'error');
+                return;
+            }
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/patch-updates/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ kb_id: kb, action: action }),
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Patch action failed: ' + response.status);
+                }
+                setPatchStatus('KB action saved: ' + kb + ' -> ' + action, 'ok');
+                await loadPatchUpdates();
+            } catch (err) {
+                setPatchStatus(err.message || 'Failed to save KB action.', 'error');
+            }
+        }
+
+        async function uninstallPatchUpdate(kb) {
+            if (!kb) {
+                setPatchStatus('KB ID is required for uninstall.', 'error');
+                return;
+            }
+
+            const confirmed = confirm('Queue uninstall for ' + kb + '? This may require reboot based on endpoint state.');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/patch-updates/uninstall', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ kb_id: kb }),
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Patch uninstall queue failed: ' + response.status));
+                }
+                const result = await response.json();
+                setPatchStatus((result.message || 'Uninstall command queued.') + ' Command #' + result.command_id + '.', 'ok');
+                await loadCommands();
+                await loadPatchUpdates();
+            } catch (err) {
+                setPatchStatus(err.message || 'Failed to queue patch uninstall.', 'error');
+            }
+        }
+
+        async function installApprovedUpdatesNow() {
+            const button = document.getElementById('install-approved-updates');
+            if (button) {
+                button.disabled = true;
+            }
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/patch-updates/install', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Install request failed: ' + response.status));
+                }
+                const result = await response.json();
+                setPatchStatus(
+                    'Install command queued (command #' + result.command_id + ', approved=' + result.approved_count + ', reboot=' + result.reboot_behavior + ').',
+                    'ok'
+                );
+                await loadCommands();
+            } catch (err) {
+                setPatchStatus(err.message || 'Failed to queue approved update installation.', 'error');
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                }
+            }
+        }
+
+        function toRFC3339FromLocalInput(value) {
+            if (!value) return '';
+            const dt = new Date(value);
+            if (Number.isNaN(dt.getTime())) return '';
+            return dt.toISOString();
+        }
+
+        function setDefaultRebootScheduleInput() {
+            const input = document.getElementById('reboot-schedule-at');
+            if (!input || input.value) return;
+            const dt = new Date(Date.now() + 10 * 60 * 1000);
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mi = String(dt.getMinutes()).padStart(2, '0');
+            input.value = `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+        }
+
+        async function rebootNow() {
+            if (!confirm('Reboot this agent now?')) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/commands', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        agent_id: agentId,
+                        command_type: 'restart',
+                        payload: '',
+                    }),
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Reboot command failed: ' + response.status);
+                }
+                setPatchStatus('Reboot command queued successfully.', 'ok');
+                await loadCommands();
+            } catch (err) {
+                setPatchStatus(err.message || 'Failed to queue reboot command.', 'error');
+            }
+        }
+
+        async function scheduleReboot() {
+            const input = document.getElementById('reboot-schedule-at');
+            if (!input) return;
+            const runAt = toRFC3339FromLocalInput(input.value);
+            if (!runAt) {
+                setPatchStatus('Select a valid reboot schedule date/time.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/schedules', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        name: 'Scheduled Reboot - ' + agentId,
+                        kind: 'command',
+                        target_scope: 'agent',
+                        target_agent_id: agentId,
+                        target_group_id: null,
+                        command_type: 'restart',
+                        payload: 'scheduled reboot',
+                        run_at: runAt,
+                        repeat_interval_seconds: 0,
+                        recurrence_rule: '',
+                        enabled: true,
+                        next_run_at: runAt,
+                    }),
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Schedule reboot failed: ' + response.status);
+                }
+                setPatchStatus('Reboot scheduled successfully at ' + new Date(runAt).toLocaleString() + '.', 'ok');
+            } catch (err) {
+                setPatchStatus(err.message || 'Failed to schedule reboot.', 'error');
+            }
         }
 
         function formatMetricTimestamp(value) {
@@ -1390,8 +2897,27 @@
             const refreshButton = document.getElementById('refresh-commands');
             const sendButton = document.getElementById('send-command');
             const typeInput = document.getElementById('command-type');
+            const agentNotifButton = document.getElementById('agent-notif-button');
             const agentChatSendButton = document.getElementById('agent-chat-send');
             const agentChatInput = document.getElementById('agent-chat-input');
+            const agentChatList = document.getElementById('agent-chat-list');
+            const agentChatNewLink = document.getElementById('agent-chat-new-link');
+            const agentChatBottomButton = document.getElementById('agent-chat-bottom-btn');
+            const commandsLimit = document.getElementById('commands-limit');
+            const commandsPrev = document.getElementById('commands-prev');
+            const commandsNext = document.getElementById('commands-next');
+            const installApprovedButton = document.getElementById('install-approved-updates');
+            const rebootNowButton = document.getElementById('reboot-now-button');
+            const rebootScheduleButton = document.getElementById('reboot-schedule-button');
+            const refreshIssuesButton = document.getElementById('refresh-issues');
+            const issuesStatusFilter = document.getElementById('issues-status-filter');
+            const issuesLimit = document.getElementById('issues-limit');
+            const issuesPrev = document.getElementById('issues-prev');
+            const issuesNext = document.getElementById('issues-next');
+            const patchLimit = document.getElementById('patch-limit');
+            const patchStatusFilter = document.getElementById('patch-status-filter');
+            const patchPrev = document.getElementById('patch-prev');
+            const patchNext = document.getElementById('patch-next');
             const metricsRange = document.getElementById('metrics-range');
             const cpuCanvas = document.getElementById('cpu-chart');
             const memoryCanvas = document.getElementById('memory-chart');
@@ -1467,6 +2993,25 @@
             if (refreshButton) {
                 refreshButton.addEventListener('click', loadCommands);
             }
+            if (commandsLimit) {
+                commandsLimit.addEventListener('change', () => {
+                    pagination.commands.limit = Number(commandsLimit.value) || 10;
+                    pagination.commands.page = 1;
+                    renderCommands(latestCommands);
+                });
+            }
+            if (commandsPrev) {
+                commandsPrev.addEventListener('click', () => {
+                    pagination.commands.page = Math.max(1, pagination.commands.page - 1);
+                    renderCommands(latestCommands);
+                });
+            }
+            if (commandsNext) {
+                commandsNext.addEventListener('click', () => {
+                    pagination.commands.page = pagination.commands.page + 1;
+                    renderCommands(latestCommands);
+                });
+            }
             if (sendButton) {
                 sendButton.addEventListener('click', queueCommand);
             }
@@ -1477,6 +3022,12 @@
             if (agentChatSendButton) {
                 agentChatSendButton.addEventListener('click', sendAgentChatMessage);
             }
+            if (agentNotifButton) {
+                agentNotifButton.addEventListener('click', () => {
+                    switchTab('chat', document.getElementById('chat-tab-button'));
+                    markAgentNotificationsAsRead();
+                });
+            }
             if (agentChatInput) {
                 agentChatInput.addEventListener('keydown', (event) => {
                     if (event.key === 'Enter' && !event.shiftKey) {
@@ -1485,6 +3036,86 @@
                     }
                 });
             }
+            if (agentChatNewLink) {
+                agentChatNewLink.addEventListener('click', () => {
+                    scrollAgentChatToFirstNewMessage();
+                });
+            }
+            if (agentChatBottomButton) {
+                agentChatBottomButton.addEventListener('click', () => {
+                    scrollAgentChatToBottom();
+                });
+            }
+            if (agentChatList) {
+                agentChatList.addEventListener('scroll', () => {
+                    if (isChatNearBottom(agentChatList)) {
+                        clearAgentUnreadJumpState();
+                    }
+                });
+            }
+            if (installApprovedButton) {
+                installApprovedButton.addEventListener('click', installApprovedUpdatesNow);
+            }
+            if (rebootNowButton) {
+                rebootNowButton.addEventListener('click', rebootNow);
+            }
+            if (rebootScheduleButton) {
+                rebootScheduleButton.addEventListener('click', scheduleReboot);
+            }
+            if (refreshIssuesButton) {
+                refreshIssuesButton.addEventListener('click', loadIssues);
+            }
+            if (issuesStatusFilter) {
+                issuesStatusFilter.addEventListener('change', () => {
+                    pagination.issues.page = 1;
+                    loadIssues();
+                });
+            }
+            if (issuesLimit) {
+                issuesLimit.addEventListener('change', () => {
+                    pagination.issues.limit = Number(issuesLimit.value) || 10;
+                    pagination.issues.page = 1;
+                    renderIssues(latestIssues);
+                });
+            }
+            if (issuesPrev) {
+                issuesPrev.addEventListener('click', () => {
+                    pagination.issues.page = Math.max(1, pagination.issues.page - 1);
+                    renderIssues(latestIssues);
+                });
+            }
+            if (issuesNext) {
+                issuesNext.addEventListener('click', () => {
+                    pagination.issues.page = pagination.issues.page + 1;
+                    renderIssues(latestIssues);
+                });
+            }
+            if (patchLimit) {
+                patchLimit.addEventListener('change', () => {
+                    pagination.patch.limit = Number(patchLimit.value) || 10;
+                    pagination.patch.page = 1;
+                    renderPatchUpdates(latestPatchUpdates);
+                });
+            }
+            if (patchStatusFilter) {
+                patchStatusFilter.addEventListener('change', () => {
+                    pagination.patch.page = 1;
+                    loadPatchUpdates();
+                });
+            }
+            if (patchPrev) {
+                patchPrev.addEventListener('click', () => {
+                    pagination.patch.page = Math.max(1, pagination.patch.page - 1);
+                    renderPatchUpdates(latestPatchUpdates);
+                });
+            }
+            if (patchNext) {
+                patchNext.addEventListener('click', () => {
+                    pagination.patch.page = pagination.patch.page + 1;
+                    renderPatchUpdates(latestPatchUpdates);
+                });
+            }
+            setDefaultRebootScheduleInput();
 
             if (cpuCanvas && memoryCanvas && networkCanvas) {
                 const charts = {
@@ -1504,7 +3135,17 @@
 
             loadCommands();
             loadAgentChat();
+            startAgentChatStream();
+            loadPatchUpdates();
+            loadIssues();
             setInterval(loadAgentChat, 5000);
+
+            window.addEventListener('beforeunload', () => {
+                if (agentChatEventSource) {
+                    agentChatEventSource.close();
+                    agentChatEventSource = null;
+                }
+            });
         });
     </script>
 </body>

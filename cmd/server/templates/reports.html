@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Execution Reports</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-1: #0c2d24;
+            --bg-2: #0f4c5c;
+            --accent: #ff9f1c;
+            --accent-soft: #ffe8c2;
+            --surface: #ffffff;
+            --ink: #1f2933;
+            --muted: #5f6c75;
+            --line: #e6eaed;
+            --shadow: rgba(0, 0, 0, 0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--ink);
+        }
+
+        .container { width: 100%; max-width: none; margin: 0 auto; }
+
+        header {
+            background: var(--surface);
+            padding: 24px 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 14px var(--shadow);
+            margin-bottom: 24px;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .nav-actions { display: flex; gap: 10px; }
+
+        .ghost-btn {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent-soft);
+            padding: 8px 14px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .section {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 6px 14px var(--shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .button-row { display: flex; gap: 10px; justify-content: flex-end; }
+
+        button {
+            background: var(--accent);
+            color: #1f2933;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        #status {
+            display: none;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+
+        #status.ok { display: block; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        #status.error { display: block; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top;
+            font-size: 12px;
+        }
+
+        th {
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .mono {
+            font-family: Consolas, 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-width: 320px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: lowercase;
+        }
+
+        .pill-ok { background: #dcfce7; color: #166534; }
+        .pill-fail { background: #fee2e2; color: #991b1b; }
+        .pill-other { background: #e2e8f0; color: #334155; }
+
+        .muted { color: var(--muted); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>Schedule Execution Reports</h1>
+                    <div class="muted">{{.Now}}</div>
+                </div>
+                <div class="nav-actions">
+                    <a class="ghost-btn" href="/agents">Agents</a>
+                    <a class="ghost-btn" href="/settings">Settings</a>
+                </div>
+            </div>
+        </header>
+
+        <section class="section">
+            <div id="status"></div>
+            <div class="form-grid">
+                <div>
+                    <label for="from">From</label>
+                    <input id="from" type="datetime-local">
+                </div>
+                <div>
+                    <label for="to">To</label>
+                    <input id="to" type="datetime-local">
+                </div>
+                <div>
+                    <label for="schedule-id">Schedule</label>
+                    <select id="schedule-id"></select>
+                </div>
+                <div>
+                    <label for="group-id">Group</label>
+                    <select id="group-id"></select>
+                </div>
+                <div>
+                    <label for="agent-id">Agent ID</label>
+                    <input id="agent-id" placeholder="optional exact agent id">
+                </div>
+                <div>
+                    <label for="limit">Limit</label>
+                    <input id="limit" type="number" min="1" max="2000" value="300">
+                </div>
+            </div>
+            <div class="button-row">
+                <button class="secondary" type="button" onclick="resetFilters()">Reset</button>
+                <button type="button" onclick="loadReports()">Run Report</button>
+            </div>
+        </section>
+
+        <section class="section">
+            <table id="report-table"></table>
+        </section>
+    </div>
+
+    <script>
+        const api = {
+            schedules: '/api/schedules?limit=500',
+            groups: '/api/groups',
+            reports: '/api/reports/executions'
+        };
+
+        function showStatus(message, type) {
+            const el = document.getElementById('status');
+            if (!el) return;
+            if (!message) {
+                el.className = '';
+                el.style.display = 'none';
+                el.textContent = '';
+                return;
+            }
+            el.className = type === 'error' ? 'error' : 'ok';
+            el.textContent = message;
+        }
+
+        async function apiFetch(url) {
+            const response = await fetch(url, { credentials: 'same-origin' });
+            if (response.status === 401 || response.status === 403) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent('/reports');
+                return [];
+            }
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return await response.json();
+        }
+
+        function optionize(select, items, placeholder) {
+            select.innerHTML = '';
+            const empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = placeholder;
+            select.appendChild(empty);
+            (items || []).forEach(item => {
+                const option = document.createElement('option');
+                option.value = String(item.id);
+                option.textContent = item.name || ('#' + item.id);
+                select.appendChild(option);
+            });
+        }
+
+        function localDateTimeValue(date) {
+            const d = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+            return d.toISOString().slice(0, 16);
+        }
+
+        function resetFilters() {
+            const now = new Date();
+            const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            document.getElementById('from').value = localDateTimeValue(from);
+            document.getElementById('to').value = localDateTimeValue(now);
+            document.getElementById('schedule-id').value = '';
+            document.getElementById('group-id').value = '';
+            document.getElementById('agent-id').value = '';
+            document.getElementById('limit').value = '300';
+            showStatus('', 'ok');
+        }
+
+        function badgeClass(status) {
+            const s = (status || '').toLowerCase();
+            if (s === 'succeeded' || s === 'completed') return 'pill pill-ok';
+            if (s === 'failed') return 'pill pill-fail';
+            return 'pill pill-other';
+        }
+
+        function renderTable(rows) {
+            const table = document.getElementById('report-table');
+            if (!rows || rows.length === 0) {
+                table.innerHTML = '<thead><tr><th>No records</th></tr></thead><tbody><tr><td class="muted">No schedule executions found for selected filters.</td></tr></tbody>';
+                return;
+            }
+
+            const header = [
+                'Created', 'Schedule', 'Target', 'Agent', 'Command', 'Status', 'Schedule Payload', 'Command Payload', 'Output', 'Error'
+            ];
+            let html = '<thead><tr>' + header.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>';
+
+            rows.forEach(item => {
+                const target = item.target_scope === 'group'
+                    ? ('Group #' + (item.target_group_id || '-') + (item.target_group_name ? (' (' + item.target_group_name + ')') : ''))
+                    : ('Agent ' + (item.target_agent_id || '-'));
+                const agent = item.agent_hostname ? (item.agent_hostname + ' (' + item.agent_id + ')') : item.agent_id;
+                html += '<tr>' +
+                    '<td>' + new Date(item.created_at).toLocaleString() + '</td>' +
+                    '<td>#' + item.schedule_id + ' - ' + (item.schedule_name || '') + '</td>' +
+                    '<td>' + target + '</td>' +
+                    '<td class="mono">' + (agent || '') + '</td>' +
+                    '<td>' + (item.command_type || '') + '</td>' +
+                    '<td><span class="' + badgeClass(item.status) + '">' + (item.status || '') + '</span></td>' +
+                    '<td class="mono">' + (item.schedule_payload || '') + '</td>' +
+                    '<td class="mono">' + (item.command_payload || '') + '</td>' +
+                    '<td class="mono">' + (item.output || '') + '</td>' +
+                    '<td class="mono">' + (item.error || '') + '</td>' +
+                    '</tr>';
+            });
+
+            html += '</tbody>';
+            table.innerHTML = html;
+        }
+
+        function buildQuery() {
+            const from = document.getElementById('from').value;
+            const to = document.getElementById('to').value;
+            const scheduleId = document.getElementById('schedule-id').value;
+            const groupId = document.getElementById('group-id').value;
+            const agentId = (document.getElementById('agent-id').value || '').trim();
+            const limit = document.getElementById('limit').value;
+
+            const params = new URLSearchParams();
+            if (from) params.set('from', from);
+            if (to) params.set('to', to);
+            if (scheduleId) params.set('schedule_id', scheduleId);
+            if (groupId) params.set('group_id', groupId);
+            if (agentId) params.set('agent_id', agentId);
+            if (limit) params.set('limit', limit);
+            return params.toString();
+        }
+
+        async function loadLookups() {
+            const [schedules, groups] = await Promise.all([
+                apiFetch(api.schedules).catch(() => []),
+                apiFetch(api.groups).catch(() => [])
+            ]);
+            optionize(document.getElementById('schedule-id'), schedules, 'All schedules');
+            optionize(document.getElementById('group-id'), groups, 'All groups');
+        }
+
+        async function loadReports() {
+            try {
+                showStatus('Loading report...', 'ok');
+                const query = buildQuery();
+                const data = await apiFetch(api.reports + (query ? ('?' + query) : ''));
+                renderTable(data || []);
+                showStatus('Loaded ' + (data ? data.length : 0) + ' execution records.', 'ok');
+            } catch (error) {
+                renderTable([]);
+                showStatus('Failed to load report: ' + error.message, 'error');
+            }
+        }
+
+        (async function init() {
+            resetFilters();
+            await loadLookups();
+            await loadReports();
+        })();
+    </script>
+</body>
+</html>

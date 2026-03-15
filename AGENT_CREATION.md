@@ -6,7 +6,7 @@ When an agent sends its first heartbeat to the server, it is **automatically cre
 
 ### How It Works
 
-The server uses PostgreSQL's **UPSERT** (INSERT ... ON CONFLICT) pattern:
+The server uses PostgreSQL's **UPSERT** (INSERT ... ON CONFLICT) pattern via `server.UpsertAgent(...)`:
 
 ```sql
 INSERT INTO agents (agent_id, hostname, domain, public_ip, private_ip, ...)
@@ -25,7 +25,7 @@ DO UPDATE SET
 
 ### Data Sent by Agent
 
-Each heartbeat includes:
+Each heartbeat includes (including extended endpoint context fields):
 - `agent_id` - Unique identifier (UUID)
 - `hostname` - Machine hostname
 - `domain` - Domain/FQDN
@@ -37,6 +37,8 @@ Each heartbeat includes:
 - `agent_version` - Agent software version
 - `status` - Current status (online/offline)
 - `last_seen` - Timestamp of last heartbeat
+- OS/security details (edition/version/build, AV, firewall, etc.)
+- Hardware + storage snapshots (disks/drives)
 
 ### Database Schema
 
@@ -44,7 +46,7 @@ The `agents` table has:
 - Primary Key: `id` (auto-increment)
 - Unique Key: `agent_id` (for conflict detection)
 - All fields with proper types and default values
-- Automatic timestamps: `date_added`, `updated_at`, `created_at`
+- Automatic timestamps and status transitions used by offline checker
 
 ### Running the System
 
@@ -56,8 +58,9 @@ go run ./cmd/server
 Output:
 ```
 2026/02/16 09:04:39 PostgreSQL connected successfully
-2026/02/16 09:04:39 ✓ Migration 001_create_agents_table already applied
-2026/02/16 09:04:39 ✓ Migration 002_add_agent_fields already applied
+2026/02/16 09:04:39 ✓ Migration 001_create_agents_table_v1_0_0 already applied
+...
+2026/02/16 09:04:39 ✓ Migration 014_create_agent_issues_table_v2_0_0 already applied
 2026/02/16 09:04:39 Starting server on port 8070
 ```
 
@@ -80,10 +83,44 @@ Output:
 
 ### Migration System
 
-Two migrations handle the database schema:
+Current migration line includes:
 
-1. **001_create_agents_table** - Creates the agents table with all columns
-2. **002_add_agent_fields** - Adds any missing columns (for backward compatibility)
+1. **001-005** - agent, command, users, metrics, OS/security fields
+2. **006-007** - governance and chat tables
+3. **008-010** - schedule engine and command linkage
+4. **011-012** - OS patch policy and audit tables
+5. **013-014** - patch inventory, alert/issue tables, and issue action audit
+
+### Issue System Integration (Alerts)
+
+Heartbeat payloads are also used to drive server-side durable alert detection.
+
+- The server evaluates heartbeat and patch posture signals and upserts alerts into `agent_issues`.
+- Alerts are deduplicated by `(agent_id, issue_key)` and move between `active` and `resolved` as endpoint state changes.
+- Recommended remediation actions can be executed immediately or scheduled through issue action APIs.
+- All remediation actions are recorded in `issue_action_audit` for traceability.
+
+For power actions generated from schedules, the dispatcher now skips duplicate in-flight `restart`/`shutdown` commands per agent when the same command type is already `queued` or `dispatched`.
+
+### Queue-backed Personal Chat Integration
+
+Personal chat execution now supports asynchronous queue flow:
+
+1. Admin posts personal chat message.
+2. Server publishes `agent_chat_task` to queue subject (`chat.agent.chat.shadow` by default).
+3. `cmd/chat-worker` consumes queue events, creates idempotent `ai_task` command records, and retries transient failures.
+4. Agent dequeues `ai_task`, executes AI/tool logic, and acknowledges output.
+5. Server relays progress + final response back into personal chat stream.
+
+Worker retry/DLQ controls:
+- `QUEUE_AGENT_CHAT_MAX_ATTEMPTS` (default `4`)
+- `QUEUE_AGENT_CHAT_DLQ_SUBJECT` (default `agent.chat.shadow.dlq`)
+
+Operational helper:
+
+```powershell
+.\scripts\show-chat-dlq.ps1 -Tail 80
+```
 
 Migrations are tracked in `schema_migrations` table and run automatically on server startup.
 
@@ -93,5 +130,5 @@ Migrations are tracked in `schema_migrations` table and run automatically on ser
 ✅ UPSERT pattern ensures idempotent updates
 ✅ Database migrations with change tracking
 ✅ No manual table creation needed
-✅ Backward compatible migration system
+✅ Backward compatible additive migration system
 ✅ Comprehensive system information collection

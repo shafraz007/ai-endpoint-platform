@@ -8,21 +8,23 @@ import (
 
 // Agent represents a monitored agent device
 type Agent struct {
-	ID           int
-	AgentID      string
-	Hostname     string
-	Domain       string
-	PublicIP     string
-	PrivateIP    string
-	LastLogin    *time.Time
-	LastSeen     time.Time
-	LastReboot   *time.Time
-	Timezone     string
-	AgentVersion string
-	Status       string
-	DateAdded    time.Time
-	UpdatedAt    time.Time
-	CreatedAt    time.Time
+	ID             int
+	AgentID        string
+	Hostname       string
+	Domain         string
+	PublicIP       string
+	PrivateIP      string
+	LastLogin      *time.Time
+	LastSeen       time.Time
+	LastReboot     *time.Time
+	RebootRequired bool
+	PatchScanAt    *time.Time
+	Timezone       string
+	AgentVersion   string
+	Status         string
+	DateAdded      time.Time
+	UpdatedAt      time.Time
+	CreatedAt      time.Time
 	// Hardware Information
 	HardwareVendor       string
 	HardwareModel        string
@@ -38,17 +40,17 @@ type Agent struct {
 	SystemDrive          string
 	MACAddresses         string
 	// OS Information
-	OSEdition              string
-	OSVersion              string
-	OSBuild                string
-	Windows11Eligible      string
-	TLS12Compatible        bool
-	DotNetVersion          string
-	OfficeVersion          string
+	OSEdition         string
+	OSVersion         string
+	OSBuild           string
+	Windows11Eligible string
+	TLS12Compatible   bool
+	DotNetVersion     string
+	OfficeVersion     string
 	// Security Information
-	AntivirusName      string
-	AntiSpywareName    string
-	FirewallName       string
+	AntivirusName   string
+	AntiSpywareName string
+	FirewallName    string
 	// Disk and drive JSON blobs
 	Disks  string
 	Drives string
@@ -58,9 +60,12 @@ type Agent struct {
 func GetAllAgents(ctx context.Context) ([]Agent, error) {
 	query := `
 	SELECT 
-		id, agent_id, hostname, domain, public_ip, private_ip,
-		last_login, last_seen, last_reboot, timezone, agent_version,
-		status, date_added, updated_at, created_at,
+		id, agent_id, hostname,
+		COALESCE(domain, ''), COALESCE(public_ip, ''), COALESCE(private_ip, ''),
+		last_login, last_seen, last_reboot,
+		COALESCE(reboot_required, FALSE), patch_scan_at,
+		COALESCE(timezone, ''), COALESCE(agent_version, ''), COALESCE(status, ''),
+		date_added, updated_at, created_at,
 		COALESCE(hardware_vendor, ''), COALESCE(hardware_model, ''),
 		COALESCE(hardware_serial_number, ''), COALESCE(motherboard, ''),
 		COALESCE(bios_manufacturer, ''), COALESCE(bios_version, ''),
@@ -98,6 +103,8 @@ func GetAllAgents(ctx context.Context) ([]Agent, error) {
 			&agent.LastLogin,
 			&agent.LastSeen,
 			&agent.LastReboot,
+			&agent.RebootRequired,
+			&agent.PatchScanAt,
 			&agent.Timezone,
 			&agent.AgentVersion,
 			&agent.Status,
@@ -147,9 +154,12 @@ func GetAllAgents(ctx context.Context) ([]Agent, error) {
 func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 	query := `
 	SELECT 
-		id, agent_id, hostname, domain, public_ip, private_ip,
-		last_login, last_seen, last_reboot, timezone, agent_version,
-		status, date_added, updated_at, created_at,
+		id, agent_id, hostname,
+		COALESCE(domain, ''), COALESCE(public_ip, ''), COALESCE(private_ip, ''),
+		last_login, last_seen, last_reboot,
+		COALESCE(reboot_required, FALSE), patch_scan_at,
+		COALESCE(timezone, ''), COALESCE(agent_version, ''), COALESCE(status, ''),
+		date_added, updated_at, created_at,
 		COALESCE(hardware_vendor, ''), COALESCE(hardware_model, ''),
 		COALESCE(hardware_serial_number, ''), COALESCE(motherboard, ''),
 		COALESCE(bios_manufacturer, ''), COALESCE(bios_version, ''),
@@ -179,6 +189,8 @@ func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 		&agent.LastLogin,
 		&agent.LastSeen,
 		&agent.LastReboot,
+		&agent.RebootRequired,
+		&agent.PatchScanAt,
 		&agent.Timezone,
 		&agent.AgentVersion,
 		&agent.Status,

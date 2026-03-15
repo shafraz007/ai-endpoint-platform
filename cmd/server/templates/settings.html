@@ -34,7 +34,8 @@
         }
 
         .container {
-            max-width: 1200px;
+            width: 100%;
+            max-width: none;
             margin: 0 auto;
         }
 
@@ -232,6 +233,71 @@
         .autocomplete-item:hover {
             background: var(--accent-soft);
         }
+
+        .small-btn {
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--ink);
+            padding: 5px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .modal-card {
+            width: min(900px, 96vw);
+            max-height: 86vh;
+            overflow: auto;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 10px 24px var(--shadow);
+            padding: 16px;
+        }
+
+        .modal-pre {
+            margin-top: 10px;
+            background: #f8fafc;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 62vh;
+            overflow: auto;
+        }
+
+        .json-editor-textarea {
+            width: 100%;
+            min-height: 62vh;
+            resize: vertical;
+            margin-top: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--line);
+            background: #f8fafc;
+            padding: 12px;
+            font-family: 'IBM Plex Mono', Consolas, Monaco, monospace;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .json-editor-error {
+            margin-top: 8px;
+            color: #b91c1c;
+            font-size: 12px;
+            min-height: 16px;
+        }
     </style>
 </head>
 <body>
@@ -244,6 +310,7 @@
                 </div>
                 <div class="nav-actions">
                     <a class="ghost-btn" href="/agents">Back to Agents</a>
+                    <a class="ghost-btn" href="/reports">Reports</a>
                 </div>
             </div>
         </header>
@@ -452,7 +519,270 @@
             <table id="member-table"></table>
         </section>
 
+        <section class="section">
+            <h2>Scheduler</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Name</label>
+                    <input id="schedule-name" placeholder="Nightly health check">
+                </div>
+                <div>
+                    <label>Kind</label>
+                    <select id="schedule-kind">
+                        <option value="task">Task</option>
+                        <option value="command">Command</option>
+                        <option value="script">Script</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Target Scope</label>
+                    <select id="schedule-target-scope" onchange="onScheduleTargetScopeChange()">
+                        <option value="agent">Agent</option>
+                        <option value="group">Group</option>
+                    </select>
+                </div>
+                <div id="schedule-agent-wrap">
+                    <label>Target Agent ID</label>
+                    <select id="schedule-target-agent"></select>
+                </div>
+                <div id="schedule-group-wrap" style="display:none;">
+                    <label>Target Group ID</label>
+                    <select id="schedule-target-group"></select>
+                </div>
+                <div>
+                    <label>Command Type</label>
+                    <input id="schedule-command-type" placeholder="ping, powershell, ai_task">
+                </div>
+                <div>
+                    <label>Run At</label>
+                    <input id="schedule-run-at" type="datetime-local">
+                </div>
+                <div>
+                    <label>Recurrence</label>
+                    <select id="schedule-recurrence" onchange="onScheduleRecurrenceChange()">
+                        <option value="once">Run once</option>
+                        <option value="interval">Repeat interval</option>
+                        <option value="weekly">Week</option>
+                        <option value="weekdays">Week day (Mon-Fri)</option>
+                        <option value="monthly">Month</option>
+                        <option value="first_day_of_month">First day of month</option>
+                        <option value="last_day_of_month">Last day of month</option>
+                        <option value="first_weekday_of_month">First weekday of month</option>
+                        <option value="last_weekday_of_month">Last weekday of month</option>
+                    </select>
+                </div>
+                <div id="schedule-recur-value-wrap" style="display:none;">
+                    <label>Every</label>
+                    <input id="schedule-recur-value" type="number" min="1" value="1">
+                </div>
+                <div id="schedule-recur-unit-wrap" style="display:none;">
+                    <label>Unit</label>
+                    <select id="schedule-recur-unit">
+                        <option value="minutes">Minutes</option>
+                        <option value="hours">Hours</option>
+                        <option value="days">Days</option>
+                    </select>
+                </div>
+                <div class="inline">
+                    <input id="schedule-enabled" class="checkbox" type="checkbox" checked>
+                    <label>Enabled</label>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label>Payload</label>
+                    <textarea id="schedule-payload" placeholder="Command/script/task payload"></textarea>
+                </div>
+            </div>
+            <div class="action-row">
+                <button class="primary-btn" onclick="createSchedule()">Create Schedule</button>
+            </div>
+            <table id="schedule-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>OS Patch Management</h2>
+            <div class="form-grid">
+                <div class="inline">
+                    <input id="ospatch-enabled" class="checkbox" type="checkbox" checked>
+                    <label>OS Patch Option Enabled</label>
+                </div>
+                <div>
+                    <label>Target Scope</label>
+                    <select id="ospatch-target-scope" onchange="onOSPatchTargetScopeChange()">
+                        <option value="agent">Agent</option>
+                        <option value="group">Group</option>
+                    </select>
+                </div>
+                <div id="ospatch-agent-wrap">
+                    <label>Target Agent ID</label>
+                    <select id="ospatch-target-agent"></select>
+                </div>
+                <div id="ospatch-group-wrap" style="display:none;">
+                    <label>Target Group ID</label>
+                    <select id="ospatch-target-group"></select>
+                </div>
+                <div>
+                    <label>KB Approval Mode</label>
+                    <select id="ospatch-approval-mode">
+                        <option value="manual">Manual approval</option>
+                        <option value="auto">Auto approve</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Auto KB Approval After (days)</label>
+                    <input id="ospatch-auto-approve-days" type="number" min="0" value="7">
+                </div>
+                <div>
+                    <label>Postpone Patches By (days)</label>
+                    <input id="ospatch-postpone-days" type="number" min="0" value="0">
+                </div>
+                <div class="inline">
+                    <input id="ospatch-autoschedule" class="checkbox" type="checkbox" checked>
+                    <label>Auto Schedule</label>
+                </div>
+                <div>
+                    <label>Schedule Type</label>
+                    <select id="ospatch-schedule-type">
+                        <option value="weekdays">Weekdays (Mon-Fri)</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Schedule Start</label>
+                    <input id="ospatch-start-at" type="datetime-local">
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label>Approved KB List (comma-separated, optional)</label>
+                    <input id="ospatch-approved-kbs" placeholder="KB5034123, KB5034765">
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label>Postponed KB List (comma-separated, optional)</label>
+                    <input id="ospatch-postponed-kbs" placeholder="KB5031234">
+                </div>
+            </div>
+            <div class="action-row" style="gap:10px; justify-content:flex-end;">
+                <button class="primary-btn" onclick="saveOSPatchSettings()">Save OS Patch Settings</button>
+                <button class="primary-btn" onclick="createOSPatchSchedule()">Create OS Patch Schedule</button>
+                <button class="danger-btn" onclick="resetOSPatchSettings()">Reset to Defaults</button>
+            </div>
+            <div class="muted" id="ospatch-summary" style="margin-top:10px;">No OS patch policy saved yet.</div>
+
+            <div class="muted" style="margin-top:14px;">Aggregated Patch Approval Window</div>
+            <div class="form-grid" style="margin-top:8px; margin-bottom:10px;">
+                <div>
+                    <label>Filter by Agent</label>
+                    <input id="ospatch-agg-agent-filter" placeholder="agent id or hostname" oninput="renderAggregatedPatchUpdates()">
+                </div>
+                <div>
+                    <label>Filter by Approval State</label>
+                    <select id="ospatch-agg-state-filter" onchange="renderAggregatedPatchUpdates()">
+                        <option value="">All states</option>
+                        <option value="pending_manual">Pending manual</option>
+                        <option value="approved_manual">Approved manual</option>
+                        <option value="approved_policy">Approved policy</option>
+                        <option value="approved_auto">Approved auto</option>
+                        <option value="postponed">Postponed</option>
+                        <option value="postponed_policy">Postponed policy</option>
+                    </select>
+                </div>
+                <div class="action-row" style="justify-content:flex-start; align-items:flex-end;">
+                    <button class="primary-btn" onclick="loadAggregatedPatchUpdates()">Refresh Updates</button>
+                    <button class="small-btn" onclick="applyBulkAggregatedPatchAction('approve')">Approve Filtered</button>
+                    <button class="small-btn" onclick="applyBulkAggregatedPatchAction('postpone')">Postpone Filtered</button>
+                    <button class="danger-btn" onclick="applyBulkAggregatedPatchAction('clear')">Clear Filtered</button>
+                </div>
+            </div>
+            <table id="ospatch-agg-table"></table>
+
+            <div class="muted" style="margin-top:12px;">OS Patch Policy Audit</div>
+            <div class="form-grid" style="margin-top:8px; margin-bottom:10px;">
+                <div>
+                    <label>Action</label>
+                    <select id="ospatch-audit-action" onchange="applyOSPatchAuditFilters()">
+                        <option value="">All actions</option>
+                        <option value="upsert">Upsert</option>
+                        <option value="reset">Reset</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Changed By</label>
+                    <input id="ospatch-audit-user" placeholder="admin" oninput="applyOSPatchAuditFilters()">
+                </div>
+                <div>
+                    <label>From Date</label>
+                    <input id="ospatch-audit-from" type="date" onchange="applyOSPatchAuditFilters()">
+                </div>
+                <div>
+                    <label>To Date</label>
+                    <input id="ospatch-audit-to" type="date" onchange="applyOSPatchAuditFilters()">
+                </div>
+                <div class="action-row" style="justify-content:flex-start; align-items:flex-end;">
+                    <button class="danger-btn" onclick="clearOSPatchAuditFilters()">Clear Filters</button>
+                </div>
+            </div>
+            <table id="ospatch-audit-table"></table>
+        </section>
+
+        <section class="section">
+            <h2>Threshold Profiles</h2>
+            <div class="muted" style="margin-bottom:10px;">Manage active threshold rules used by issues and alerts detection.</div>
+            <div class="form-grid">
+                <div>
+                    <label>Profile</label>
+                    <select id="threshold-profile-select"></select>
+                </div>
+                <div>
+                    <label>Name</label>
+                    <input id="threshold-profile-name" placeholder="default-threshold-profile">
+                </div>
+                <div>
+                    <label>Description</label>
+                    <input id="threshold-profile-description" placeholder="Performance and hardware thresholds">
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label>Rules (JSON array)</label>
+                    <textarea id="threshold-rules-json" placeholder='[{"rule_key":"performance-memory-critical","issue_key":"perf-memory-usage-critical","category":"performance","severity":"critical","signal":"memory_used_percent","comparator":"gt","threshold_value":95,"duration_minutes":9,"enabled":true,"title":"Memory usage sustained above 95%","description":"Memory usage exceeded 95% continuously across the configured 9-minute period.","source":"metrics"}]'></textarea>
+                </div>
+            </div>
+            <div class="action-row" style="gap:10px; justify-content:flex-end;">
+                <button class="primary-btn" onclick="loadThresholdProfiles()">Refresh Profiles</button>
+                <button class="primary-btn" onclick="loadActiveThresholdProfile()">Load Active</button>
+                <button class="primary-btn" onclick="saveActiveThresholdProfile()">Save Active Profile</button>
+            </div>
+            <div class="muted" id="threshold-summary" style="margin-top:10px;">No active threshold profile loaded.</div>
+            <table id="threshold-rules-table" style="margin-top:10px;"></table>
+        </section>
+
         <div class="footer">AI Endpoint Platform • Governance</div>
+    </div>
+
+    <div id="ospatch-audit-modal" class="modal-backdrop" onclick="closeOSPatchAuditModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="action-row" style="justify-content:space-between; align-items:center;">
+                <strong>OS Patch Audit Payload</strong>
+                <div style="display:flex; gap:8px;">
+                    <button class="small-btn" onclick="copyOSPatchAuditPayload()">Copy Payload</button>
+                    <button class="danger-btn" onclick="closeOSPatchAuditModal()">Close</button>
+                </div>
+            </div>
+            <pre id="ospatch-audit-modal-body" class="modal-pre"></pre>
+        </div>
+    </div>
+
+    <div id="json-edit-modal" class="modal-backdrop" onclick="closeJSONEditModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()" style="width:min(1100px, 98vw);">
+            <div class="action-row" style="justify-content:space-between; align-items:center;">
+                <strong id="json-edit-title">Edit JSON</strong>
+                <div style="display:flex; gap:8px;">
+                    <button class="small-btn" onclick="formatJSONEditValue()">Tidy JSON</button>
+                    <button class="small-btn" onclick="copyJSONEditValue()">Copy</button>
+                    <button class="danger-btn" onclick="closeJSONEditModal()">Cancel</button>
+                    <button class="primary-btn" onclick="saveJSONEditModal()">Save</button>
+                </div>
+            </div>
+            <textarea id="json-edit-text" class="json-editor-textarea" spellcheck="false"></textarea>
+            <div id="json-edit-error" class="json-editor-error"></div>
+        </div>
     </div>
 
     <script>
@@ -462,7 +792,15 @@
             scripts: '/api/profiles/scripts',
             patches: '/api/profiles/patches',
             groups: '/api/groups',
-            agents: '/api/agents'
+            agents: '/api/agents',
+            schedules: '/api/schedules',
+            osPatchPolicy: '/api/os-patch/policy',
+            osPatchPolicyReset: '/api/os-patch/policy/reset',
+            osPatchPolicyAudit: '/api/os-patch/policy/audit?limit=50',
+            osPatchUpdates: '/api/os-patch/updates?limit=2000',
+            osPatchUpdatesActions: '/api/os-patch/updates/actions',
+            thresholdProfiles: '/api/threshold-profiles',
+            thresholdProfileActive: '/api/threshold-profiles/active'
         };
 
         // Cache for lookup data
@@ -471,8 +809,17 @@
             policies: [],
             scripts: [],
             patches: [],
-            agents: []
+            agents: [],
+            groups: [],
+            schedules: []
         };
+
+        let cachedOSPatchPolicy = null;
+        let cachedOSPatchAuditEntries = [];
+        let cachedAggregatedPatchUpdates = [];
+        let cachedThresholdProfiles = [];
+        let cachedActiveThresholdProfile = null;
+        let jsonEditResolver = null;
 
         function showStatus(message, type) {
             const el = document.getElementById('status-message');
@@ -514,6 +861,117 @@
             } catch (err) {
                 return fallback;
             }
+        }
+
+        function openJSONEditModal(title, initial) {
+            const modal = document.getElementById('json-edit-modal');
+            const titleEl = document.getElementById('json-edit-title');
+            const textarea = document.getElementById('json-edit-text');
+            const errorEl = document.getElementById('json-edit-error');
+            if (!modal || !titleEl || !textarea || !errorEl) {
+                return Promise.resolve(null);
+            }
+
+            titleEl.textContent = title || 'Edit JSON';
+            textarea.value = JSON.stringify(initial, null, 2);
+            errorEl.textContent = '';
+            modal.style.display = 'flex';
+
+            setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            }, 0);
+
+            return new Promise(resolve => {
+                jsonEditResolver = resolve;
+            });
+        }
+
+        function isJSONEditModalOpen() {
+            const modal = document.getElementById('json-edit-modal');
+            return !!(modal && modal.style.display === 'flex');
+        }
+
+        function closeJSONEditModal(event) {
+            if (event && event.target && event.target.id !== 'json-edit-modal') {
+                return;
+            }
+            const modal = document.getElementById('json-edit-modal');
+            const errorEl = document.getElementById('json-edit-error');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            if (errorEl) {
+                errorEl.textContent = '';
+            }
+            if (jsonEditResolver) {
+                const resolve = jsonEditResolver;
+                jsonEditResolver = null;
+                resolve(null);
+            }
+        }
+
+        function formatJSONEditValue() {
+            const textarea = document.getElementById('json-edit-text');
+            const errorEl = document.getElementById('json-edit-error');
+            if (!textarea) return;
+            try {
+                const parsed = JSON.parse(textarea.value || '{}');
+                textarea.value = JSON.stringify(parsed, null, 2);
+                if (errorEl) errorEl.textContent = '';
+            } catch (err) {
+                if (errorEl) errorEl.textContent = 'Invalid JSON: ' + err.message;
+            }
+        }
+
+        async function copyJSONEditValue() {
+            const textarea = document.getElementById('json-edit-text');
+            if (!textarea) return;
+            const text = textarea.value || '';
+            if (!text.trim()) {
+                showStatus('No JSON content to copy.', 'error');
+                return;
+            }
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    textarea.select();
+                    document.execCommand('copy');
+                }
+                showStatus('JSON copied to clipboard.', 'success');
+            } catch (_) {
+                showStatus('Failed to copy JSON.', 'error');
+            }
+        }
+
+        function saveJSONEditModal() {
+            const modal = document.getElementById('json-edit-modal');
+            const textarea = document.getElementById('json-edit-text');
+            const errorEl = document.getElementById('json-edit-error');
+            if (!modal || !textarea) return;
+
+            try {
+                const parsed = JSON.parse(textarea.value);
+                textarea.value = JSON.stringify(parsed, null, 2);
+                if (errorEl) errorEl.textContent = '';
+                modal.style.display = 'none';
+                if (jsonEditResolver) {
+                    const resolve = jsonEditResolver;
+                    jsonEditResolver = null;
+                    resolve(parsed);
+                }
+            } catch (err) {
+                if (errorEl) {
+                    errorEl.textContent = 'Invalid JSON: ' + err.message;
+                }
+            }
+        }
+
+        async function editJSONPrompt(title, initial) {
+            const result = await openJSONEditModal(title, initial);
+            if (result === null) return null;
+            return result;
         }
 
         async function apiFetch(url, options) {
@@ -570,13 +1028,14 @@
         async function loadAll() {
             try {
                 showStatus('Loading governance data...', 'info');
-                const [categories, policies, scripts, patches, groups, agents] = await Promise.all([
+                const [categories, policies, scripts, patches, groups, agents, schedules] = await Promise.all([
                     apiFetch(api.categories).catch(e => { console.error('Failed to load categories:', e); return []; }),
                     apiFetch(api.policies).catch(e => { console.error('Failed to load policies:', e); return []; }),
                     apiFetch(api.scripts).catch(e => { console.error('Failed to load script profiles:', e); return []; }),
                     apiFetch(api.patches).catch(e => { console.error('Failed to load patch profiles:', e); return []; }),
                     apiFetch(api.groups).catch(e => { console.error('Failed to load groups:', e); return []; }),
-                    apiFetch(api.agents).catch(e => { console.error('Failed to load agents:', e); return []; })
+                    apiFetch(api.agents).catch(e => { console.error('Failed to load agents:', e); return []; }),
+                    apiFetch(api.schedules).catch(e => { console.error('Failed to load schedules:', e); return []; })
                 ]);
 
                 // Cache the data for lookups
@@ -585,18 +1044,34 @@
                 cachedData.scripts = scripts || [];
                 cachedData.patches = patches || [];
                 cachedData.agents = agents || [];
+                cachedData.groups = groups || [];
+                cachedData.schedules = schedules || [];
 
                 renderCategories(categories || []);
                 renderPolicies(policies || []);
                 renderProfiles('script', scripts || []);
                 renderProfiles('patch', patches || []);
                 renderGroups(groups || []);
+                renderSchedules(schedules || []);
 
                 optionize(document.getElementById('group-category'), categories || [], 'None');
                 optionize(document.getElementById('group-policy'), policies || [], 'None');
                 optionize(document.getElementById('group-script-profile'), scripts || [], 'None');
                 optionize(document.getElementById('group-patch-profile'), patches || [], 'None');
                 optionize(document.getElementById('member-group'), groups || [], 'Select group');
+                const scheduleAgentOptions = (agents || []).map(agent => ({
+                    id: agent.id,
+                    name: (agent.hostname ? agent.hostname + ' - ' : '') + agent.id
+                }));
+                optionize(document.getElementById('schedule-target-agent'), scheduleAgentOptions, 'Select agent');
+                optionize(document.getElementById('schedule-target-group'), groups || [], 'Select group');
+                optionize(document.getElementById('ospatch-target-agent'), scheduleAgentOptions, 'Select agent');
+                optionize(document.getElementById('ospatch-target-group'), groups || [], 'Select group');
+                await initializeOSPatchSection();
+                await loadOSPatchAudit();
+                await loadAggregatedPatchUpdates();
+                renderOSPatchSummary();
+                await loadThresholdProfiles();
                 
                 hideStatus();
                 console.log('Governance data loaded successfully');
@@ -616,6 +1091,186 @@
                 })
             });
             await loadAll();
+        }
+
+        function normalizeThresholdRuleForSave(item) {
+            return {
+                rule_key: String((item && item.rule_key) || '').trim(),
+                issue_key: String((item && item.issue_key) || '').trim(),
+                category: String((item && item.category) || '').trim().toLowerCase(),
+                severity: String((item && item.severity) || '').trim().toLowerCase(),
+                signal: String((item && item.signal) || '').trim().toLowerCase(),
+                comparator: String((item && item.comparator) || '').trim().toLowerCase(),
+                threshold_value: Number((item && item.threshold_value) || 0),
+                duration_minutes: Number((item && item.duration_minutes) || 0),
+                enabled: !!((item && item.enabled) !== false),
+                title: String((item && item.title) || '').trim(),
+                description: String((item && item.description) || '').trim(),
+                source: String((item && item.source) || 'metrics').trim().toLowerCase()
+            };
+        }
+
+        function renderThresholdRulesTable(rules) {
+            const table = document.getElementById('threshold-rules-table');
+            if (!table) return;
+
+            const rows = (rules || []).map(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${item.rule_key || '-'}</td><td>${item.issue_key || '-'}</td><td>${item.category || '-'}</td><td>${item.severity || '-'}</td><td>${item.signal || '-'}</td><td>${item.comparator || '-'}</td><td>${item.threshold_value}</td><td>${item.duration_minutes}</td><td>${item.enabled === false ? 'false' : 'true'}</td><td>${item.source || '-'}</td>`;
+                return row;
+            });
+
+            renderTable(table, ['Rule Key', 'Issue Key', 'Category', 'Severity', 'Signal', 'Cmp', 'Threshold', 'Minutes', 'Enabled', 'Source'], rows);
+        }
+
+        function renderThresholdSummary(profile) {
+            const summary = document.getElementById('threshold-summary');
+            if (!summary) return;
+            if (!profile) {
+                summary.textContent = 'No active threshold profile loaded.';
+                return;
+            }
+
+            const rules = Array.isArray(profile.rules) ? profile.rules : [];
+            const enabledCount = rules.filter(rule => rule.enabled !== false).length;
+            summary.textContent = `Active profile: ${profile.name || '-'} • Total rules: ${rules.length} • Enabled: ${enabledCount}`;
+        }
+
+        function populateThresholdProfileEditor(profile) {
+            const profileName = document.getElementById('threshold-profile-name');
+            const profileDescription = document.getElementById('threshold-profile-description');
+            const rulesJson = document.getElementById('threshold-rules-json');
+            if (!profileName || !profileDescription || !rulesJson) return;
+
+            if (!profile) {
+                profileName.value = '';
+                profileDescription.value = '';
+                rulesJson.value = '[]';
+                renderThresholdRulesTable([]);
+                renderThresholdSummary(null);
+                return;
+            }
+
+            profileName.value = profile.name || '';
+            profileDescription.value = profile.description || '';
+            const rules = Array.isArray(profile.rules) ? profile.rules : [];
+            rulesJson.value = JSON.stringify(rules, null, 2);
+            renderThresholdRulesTable(rules);
+            renderThresholdSummary(profile);
+        }
+
+        function populateThresholdProfileSelect(items, activeProfile) {
+            const select = document.getElementById('threshold-profile-select');
+            if (!select) return;
+
+            select.innerHTML = '';
+            (items || []).forEach(item => {
+                const option = document.createElement('option');
+                option.value = String(item.id);
+                option.textContent = `${item.name || 'profile'}${item.is_active ? ' (active)' : ''}`;
+                select.appendChild(option);
+            });
+
+            if (activeProfile && activeProfile.id) {
+                select.value = String(activeProfile.id);
+            }
+        }
+
+        async function loadActiveThresholdProfile() {
+            try {
+                const active = await apiFetch(api.thresholdProfileActive);
+                cachedActiveThresholdProfile = active || null;
+                populateThresholdProfileEditor(cachedActiveThresholdProfile);
+                populateThresholdProfileSelect(cachedThresholdProfiles, cachedActiveThresholdProfile);
+            } catch (error) {
+                cachedActiveThresholdProfile = null;
+                populateThresholdProfileEditor(null);
+                showStatus('Failed to load active threshold profile: ' + error.message, 'error');
+            }
+        }
+
+        async function loadThresholdProfiles() {
+            try {
+                cachedThresholdProfiles = await apiFetch(api.thresholdProfiles) || [];
+            } catch (error) {
+                cachedThresholdProfiles = [];
+                showStatus('Failed to load threshold profiles: ' + error.message, 'error');
+            }
+            await loadActiveThresholdProfile();
+        }
+
+        async function saveActiveThresholdProfile() {
+            const profileName = document.getElementById('threshold-profile-name');
+            const profileDescription = document.getElementById('threshold-profile-description');
+            const rulesJson = document.getElementById('threshold-rules-json');
+            if (!profileName || !profileDescription || !rulesJson) return;
+
+            const name = String(profileName.value || '').trim();
+            if (!name) {
+                showStatus('Threshold profile name is required.', 'error');
+                return;
+            }
+
+            let parsedRules = [];
+            try {
+                parsedRules = JSON.parse(rulesJson.value || '[]');
+                if (!Array.isArray(parsedRules)) {
+                    throw new Error('Rules must be a JSON array');
+                }
+            } catch (error) {
+                showStatus('Invalid threshold rules JSON: ' + error.message, 'error');
+                return;
+            }
+
+            const normalizedRules = parsedRules.map(normalizeThresholdRuleForSave);
+            if (normalizedRules.length === 0) {
+                showStatus('At least one threshold rule is required.', 'error');
+                return;
+            }
+
+            const payload = {
+                name: name,
+                description: String(profileDescription.value || '').trim(),
+                rules: normalizedRules
+            };
+
+            try {
+                const saved = await apiFetch(api.thresholdProfileActive, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload)
+                });
+                cachedActiveThresholdProfile = saved || null;
+                populateThresholdProfileEditor(cachedActiveThresholdProfile);
+                await loadThresholdProfiles();
+                showStatus('Active threshold profile saved.', 'success');
+            } catch (error) {
+                showStatus('Failed to save threshold profile: ' + error.message, 'error');
+            }
+        }
+
+        function onThresholdProfileSelectChange() {
+            const select = document.getElementById('threshold-profile-select');
+            if (!select) return;
+            const selectedID = Number(select.value || 0);
+            if (!Number.isFinite(selectedID) || selectedID <= 0) {
+                return;
+            }
+
+            const match = (cachedThresholdProfiles || []).find(item => Number(item.id) === selectedID);
+            if (!match) {
+                return;
+            }
+
+            const rules = Array.isArray(match.rules) ? match.rules : [];
+            const merged = {
+                id: match.id,
+                name: match.name,
+                description: match.description,
+                is_active: !!match.is_active,
+                rules: rules
+            };
+
+            populateThresholdProfileEditor(merged);
         }
 
         async function createPolicy() {
@@ -676,6 +1331,786 @@
             await loadMembers(groupId);
         }
 
+        function toRFC3339(localValue) {
+            if (!localValue) return '';
+            const dt = new Date(localValue);
+            if (Number.isNaN(dt.getTime())) return '';
+            return dt.toISOString();
+        }
+
+        function onScheduleTargetScopeChange() {
+            const scope = document.getElementById('schedule-target-scope').value;
+            const agentWrap = document.getElementById('schedule-agent-wrap');
+            const groupWrap = document.getElementById('schedule-group-wrap');
+            if (scope === 'group') {
+                agentWrap.style.display = 'none';
+                groupWrap.style.display = 'block';
+            } else {
+                agentWrap.style.display = 'block';
+                groupWrap.style.display = 'none';
+            }
+        }
+
+        function onScheduleRecurrenceChange() {
+            const mode = document.getElementById('schedule-recurrence').value;
+            const valueWrap = document.getElementById('schedule-recur-value-wrap');
+            const unitWrap = document.getElementById('schedule-recur-unit-wrap');
+            if (mode === 'interval') {
+                valueWrap.style.display = 'block';
+                unitWrap.style.display = 'block';
+            } else {
+                valueWrap.style.display = 'none';
+                unitWrap.style.display = 'none';
+            }
+        }
+
+        function recurrenceSecondsFromUI() {
+            const mode = document.getElementById('schedule-recurrence').value;
+            if (mode !== 'interval') return 0;
+
+            const value = Number(document.getElementById('schedule-recur-value').value || 0);
+            const unit = document.getElementById('schedule-recur-unit').value;
+            if (!Number.isFinite(value) || value <= 0) {
+                return null;
+            }
+
+            switch (unit) {
+                case 'minutes':
+                    return value * 60;
+                case 'hours':
+                    return value * 60 * 60;
+                case 'days':
+                    return value * 60 * 60 * 24;
+                default:
+                    return null;
+            }
+        }
+
+        function recurrenceRuleFromUI() {
+            const mode = document.getElementById('schedule-recurrence').value;
+            if (mode === 'once' || mode === 'interval') return '';
+            return mode;
+        }
+
+        function initializeScheduleDefaults() {
+            const runAtInput = document.getElementById('schedule-run-at');
+            if (!runAtInput || runAtInput.value) return;
+            const dt = new Date(Date.now() + 5 * 60 * 1000);
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mi = String(dt.getMinutes()).padStart(2, '0');
+            runAtInput.value = `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+        }
+
+        function defaultOSPatchSettings() {
+            const dt = new Date(Date.now() + 10 * 60 * 1000);
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mi = String(dt.getMinutes()).padStart(2, '0');
+            return {
+                enabled: true,
+                target_scope: 'agent',
+                target_agent_id: '',
+                target_group_id: null,
+                approval_mode: 'manual',
+                auto_approve_days: 7,
+                postpone_days: 0,
+                auto_schedule: true,
+                schedule_type: 'weekdays',
+                start_at: `${yyyy}-${mm}-${dd}T${hh}:${mi}`,
+                approved_kbs: [],
+                postponed_kbs: []
+            };
+        }
+
+        function parseCSVList(value) {
+            return (value || '')
+                .split(',')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+        }
+
+        function toLocalDateTimeInputValue(value) {
+            if (!value) return '';
+            const dt = new Date(value);
+            if (Number.isNaN(dt.getTime())) return '';
+            const yyyy = dt.getFullYear();
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const hh = String(dt.getHours()).padStart(2, '0');
+            const mi = String(dt.getMinutes()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+        }
+
+        function mapPolicyResponseToUI(policy) {
+            const defaults = defaultOSPatchSettings();
+            if (!policy || typeof policy !== 'object') {
+                return defaults;
+            }
+
+            return {
+                enabled: policy.enabled !== false,
+                target_scope: policy.target_scope || defaults.target_scope,
+                target_agent_id: policy.target_agent_id || '',
+                target_group_id: policy.target_group_id || null,
+                approval_mode: policy.kb_approval_mode || defaults.approval_mode,
+                auto_approve_days: Number(policy.auto_approval_after_days || 0),
+                postpone_days: Number(policy.postpone_days || 0),
+                auto_schedule: policy.auto_schedule_enabled !== false,
+                schedule_type: policy.auto_schedule_rule || defaults.schedule_type,
+                start_at: toLocalDateTimeInputValue(policy.schedule_start_at) || defaults.start_at,
+                approved_kbs: Array.isArray(policy.approved_kbs) ? policy.approved_kbs : [],
+                postponed_kbs: Array.isArray(policy.postponed_kbs) ? policy.postponed_kbs : []
+            };
+        }
+
+        async function initializeOSPatchSection() {
+            let settings = defaultOSPatchSettings();
+            try {
+                const policy = await apiFetch(api.osPatchPolicy);
+                cachedOSPatchPolicy = policy;
+                settings = mapPolicyResponseToUI(policy);
+            } catch (error) {
+                console.warn('Failed to load OS patch policy from server, using defaults.', error);
+                cachedOSPatchPolicy = null;
+            }
+
+            document.getElementById('ospatch-enabled').checked = !!settings.enabled;
+            document.getElementById('ospatch-target-scope').value = settings.target_scope || 'agent';
+            document.getElementById('ospatch-target-agent').value = settings.target_agent_id || '';
+            document.getElementById('ospatch-target-group').value = settings.target_group_id || '';
+            document.getElementById('ospatch-approval-mode').value = settings.approval_mode || 'manual';
+            document.getElementById('ospatch-auto-approve-days').value = Number(settings.auto_approve_days || 0);
+            document.getElementById('ospatch-postpone-days').value = Number(settings.postpone_days || 0);
+            document.getElementById('ospatch-autoschedule').checked = !!settings.auto_schedule;
+            document.getElementById('ospatch-schedule-type').value = settings.schedule_type || 'weekdays';
+            document.getElementById('ospatch-start-at').value = settings.start_at || defaultOSPatchSettings().start_at;
+            document.getElementById('ospatch-approved-kbs').value = (settings.approved_kbs || []).join(', ');
+            document.getElementById('ospatch-postponed-kbs').value = (settings.postponed_kbs || []).join(', ');
+
+            onOSPatchTargetScopeChange();
+        }
+
+        function onOSPatchTargetScopeChange() {
+            const scope = document.getElementById('ospatch-target-scope').value;
+            const agentWrap = document.getElementById('ospatch-agent-wrap');
+            const groupWrap = document.getElementById('ospatch-group-wrap');
+            if (scope === 'group') {
+                agentWrap.style.display = 'none';
+                groupWrap.style.display = 'block';
+            } else {
+                agentWrap.style.display = 'block';
+                groupWrap.style.display = 'none';
+            }
+        }
+
+        function gatherOSPatchSettingsFromUI() {
+            const targetScope = document.getElementById('ospatch-target-scope').value;
+            const targetAgent = (document.getElementById('ospatch-target-agent').value || '').trim();
+            const targetGroup = toInt(document.getElementById('ospatch-target-group').value);
+
+            return {
+                enabled: document.getElementById('ospatch-enabled').checked,
+                target_scope: targetScope,
+                target_agent_id: targetScope === 'agent' ? targetAgent : '',
+                target_group_id: targetScope === 'group' ? targetGroup : null,
+                kb_approval_mode: document.getElementById('ospatch-approval-mode').value,
+                auto_approval_after_days: Number(document.getElementById('ospatch-auto-approve-days').value || 0),
+                postpone_days: Number(document.getElementById('ospatch-postpone-days').value || 0),
+                auto_schedule_enabled: document.getElementById('ospatch-autoschedule').checked,
+                auto_schedule_rule: document.getElementById('ospatch-schedule-type').value,
+                schedule_start_at: toRFC3339(document.getElementById('ospatch-start-at').value),
+                approved_kbs: parseCSVList(document.getElementById('ospatch-approved-kbs').value),
+                postponed_kbs: parseCSVList(document.getElementById('ospatch-postponed-kbs').value)
+            };
+        }
+
+        function renderOSPatchSummary() {
+            const settings = mapPolicyResponseToUI(cachedOSPatchPolicy || defaultOSPatchSettings());
+            const el = document.getElementById('ospatch-summary');
+            if (!el) return;
+
+            const target = settings.target_scope === 'group'
+                ? `group:${settings.target_group_id || '-'}`
+                : `agent:${settings.target_agent_id || '-'}`;
+
+            el.textContent = `OS Patch: ${settings.enabled ? 'enabled' : 'disabled'} • Target ${target} • KB approval: ${settings.approval_mode} • Auto approve after ${settings.auto_approve_days} day(s) • Postpone ${settings.postpone_days} day(s) • Auto schedule: ${settings.auto_schedule ? settings.schedule_type : 'disabled'}`;
+        }
+
+        function formatDateTime(value) {
+            if (!value) return '-';
+            const dt = new Date(value);
+            if (Number.isNaN(dt.getTime())) return value;
+            return dt.toLocaleString();
+        }
+
+        async function loadOSPatchAudit() {
+            try {
+                cachedOSPatchAuditEntries = await apiFetch(api.osPatchPolicyAudit) || [];
+                applyOSPatchAuditFilters();
+            } catch (error) {
+                console.warn('Failed to load OS patch audit trail:', error);
+                cachedOSPatchAuditEntries = [];
+                const table = document.getElementById('ospatch-audit-table');
+                renderTable(table, ['ID', 'Action', 'Changed By', 'When', 'Payload'], []);
+            }
+        }
+
+        function renderAggregatedPatchUpdates() {
+            const table = document.getElementById('ospatch-agg-table');
+            if (!table) return;
+
+            const agentFilter = (document.getElementById('ospatch-agg-agent-filter').value || '').trim().toLowerCase();
+            const stateFilter = (document.getElementById('ospatch-agg-state-filter').value || '').trim().toLowerCase();
+
+            const filtered = (cachedAggregatedPatchUpdates || []).filter(item => {
+                const hay = `${item.agent_id || ''} ${item.hostname || ''}`.toLowerCase();
+                if (agentFilter && !hay.includes(agentFilter)) return false;
+                const state = (item.approval_state || '').toLowerCase();
+                if (stateFilter && state !== stateFilter) return false;
+                return true;
+            });
+
+            const rows = filtered.map(item => {
+                const tr = document.createElement('tr');
+                const kb = item.kb_id || '-';
+                const severity = item.severity || '-';
+                const updateType = [
+                    item.is_critical ? 'Critical' : '',
+                    item.is_security ? 'Security' : '',
+                    item.is_driver ? 'Driver' : '',
+                    item.is_os ? 'OS' : '',
+                    item.is_software ? 'Software' : ''
+                ].filter(Boolean).join(', ') || '-';
+
+                let actions = '<span class="muted">No KB</span>';
+                if (item.kb_id) {
+                    actions = `<button class="small-btn" onclick="applyAggregatedPatchAction('${item.agent_id}', '${item.kb_id}', 'approve')">Approve</button>
+                        <button class="small-btn" onclick="applyAggregatedPatchAction('${item.agent_id}', '${item.kb_id}', 'postpone')">Postpone</button>
+                        <button class="danger-btn" onclick="applyAggregatedPatchAction('${item.agent_id}', '${item.kb_id}', 'clear')">Clear</button>`;
+                }
+
+                tr.innerHTML = `<td>${item.agent_id || '-'}</td><td>${item.hostname || '-'}</td><td>${kb}</td><td>${item.title || '-'}</td><td>${severity}</td><td>${updateType}</td><td>${item.approval_state || '-'}</td><td>${actions}</td>`;
+                return tr;
+            });
+
+            renderTable(table, ['Agent ID', 'Hostname', 'KB', 'Title', 'Severity', 'Type', 'Approval', 'Actions'], rows);
+        }
+
+        function getFilteredAggregatedPatchUpdates() {
+            const agentFilter = (document.getElementById('ospatch-agg-agent-filter').value || '').trim().toLowerCase();
+            const stateFilter = (document.getElementById('ospatch-agg-state-filter').value || '').trim().toLowerCase();
+
+            return (cachedAggregatedPatchUpdates || []).filter(item => {
+                const hay = `${item.agent_id || ''} ${item.hostname || ''}`.toLowerCase();
+                if (agentFilter && !hay.includes(agentFilter)) return false;
+                const state = (item.approval_state || '').toLowerCase();
+                if (stateFilter && state !== stateFilter) return false;
+                return true;
+            });
+        }
+
+        async function loadAggregatedPatchUpdates() {
+            try {
+                cachedAggregatedPatchUpdates = await apiFetch(api.osPatchUpdates) || [];
+            } catch (error) {
+                console.warn('Failed to load aggregated patch updates:', error);
+                cachedAggregatedPatchUpdates = [];
+                showStatus('Failed to load aggregated patch updates: ' + error.message, 'error');
+            }
+            renderAggregatedPatchUpdates();
+        }
+
+        async function applyAggregatedPatchAction(agentId, kbId, action) {
+            if (!agentId || !kbId) {
+                showStatus('Agent ID and KB ID are required.', 'error');
+                return;
+            }
+            try {
+                await apiFetch(api.osPatchUpdatesActions, {
+                    method: 'POST',
+                    body: JSON.stringify({ agent_id: agentId, kb_id: kbId, action })
+                });
+                showStatus(`Patch action saved: ${agentId} ${kbId} -> ${action}`, 'success');
+                await loadAggregatedPatchUpdates();
+            } catch (error) {
+                showStatus('Failed to save patch action: ' + error.message, 'error');
+            }
+        }
+
+        async function applyBulkAggregatedPatchAction(action) {
+            const filtered = getFilteredAggregatedPatchUpdates();
+            const actionable = filtered.filter(item => !!item.kb_id && !!item.agent_id);
+
+            if (actionable.length === 0) {
+                showStatus('No filtered rows with actionable KB IDs.', 'error');
+                return;
+            }
+
+            const unique = [];
+            const seen = new Set();
+            actionable.forEach(item => {
+                const key = `${item.agent_id}|${item.kb_id}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                unique.push(item);
+            });
+
+            let success = 0;
+            let failed = 0;
+            for (const item of unique) {
+                try {
+                    await apiFetch(api.osPatchUpdatesActions, {
+                        method: 'POST',
+                        body: JSON.stringify({ agent_id: item.agent_id, kb_id: item.kb_id, action })
+                    });
+                    success += 1;
+                } catch (error) {
+                    failed += 1;
+                }
+            }
+
+            await loadAggregatedPatchUpdates();
+            if (failed > 0) {
+                showStatus(`Bulk action completed with partial failures: success=${success}, failed=${failed}`, 'error');
+            } else {
+                showStatus(`Bulk action completed: ${action} applied to ${success} row(s).`, 'success');
+            }
+        }
+
+        function applyOSPatchAuditFilters() {
+            const action = (document.getElementById('ospatch-audit-action').value || '').trim().toLowerCase();
+            const userQuery = (document.getElementById('ospatch-audit-user').value || '').trim().toLowerCase();
+            const fromDateRaw = document.getElementById('ospatch-audit-from').value;
+            const toDateRaw = document.getElementById('ospatch-audit-to').value;
+            const fromDate = fromDateRaw ? new Date(fromDateRaw + 'T00:00:00') : null;
+            const toDate = toDateRaw ? new Date(toDateRaw + 'T23:59:59') : null;
+
+            const filtered = (cachedOSPatchAuditEntries || []).filter(item => {
+                const itemAction = ((item && item.action) || '').toLowerCase();
+                const itemUser = ((item && item.changed_by) || '').toLowerCase();
+                const created = new Date(item.created_at || '');
+
+                if (action && itemAction !== action) return false;
+                if (userQuery && !itemUser.includes(userQuery)) return false;
+                if (fromDate && (!created || Number.isNaN(created.getTime()) || created < fromDate)) return false;
+                if (toDate && (!created || Number.isNaN(created.getTime()) || created > toDate)) return false;
+
+                return true;
+            });
+
+            const table = document.getElementById('ospatch-audit-table');
+            const dataRows = filtered.map(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.action || '-'}</td><td>${item.changed_by || '-'}</td><td>${formatDateTime(item.created_at)}</td><td><button class="small-btn" onclick="openOSPatchAuditModal(${item.id})">View Payload</button></td>`;
+                return tr;
+            });
+            renderTable(table, ['ID', 'Action', 'Changed By', 'When', 'Payload'], dataRows);
+        }
+
+        function clearOSPatchAuditFilters() {
+            document.getElementById('ospatch-audit-action').value = '';
+            document.getElementById('ospatch-audit-user').value = '';
+            document.getElementById('ospatch-audit-from').value = '';
+            document.getElementById('ospatch-audit-to').value = '';
+            applyOSPatchAuditFilters();
+        }
+
+        function openOSPatchAuditModal(id) {
+            const entry = (cachedOSPatchAuditEntries || []).find(item => Number(item.id) === Number(id));
+            const modal = document.getElementById('ospatch-audit-modal');
+            const body = document.getElementById('ospatch-audit-modal-body');
+            if (!modal || !body) return;
+
+            if (!entry) {
+                body.textContent = 'Audit entry not found.';
+                modal.style.display = 'flex';
+                return;
+            }
+
+            let payloadText = (entry.payload || '').trim();
+            if (!payloadText) payloadText = '{}';
+            try {
+                const parsed = JSON.parse(payloadText);
+                payloadText = JSON.stringify(parsed, null, 2);
+            } catch (_) {
+                // Keep raw payload when it is not valid JSON
+            }
+
+            body.textContent = payloadText;
+            modal.style.display = 'flex';
+        }
+
+        function closeOSPatchAuditModal(event) {
+            if (event && event.target && event.target.id !== 'ospatch-audit-modal') {
+                return;
+            }
+            const modal = document.getElementById('ospatch-audit-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function isOSPatchAuditModalOpen() {
+            const modal = document.getElementById('ospatch-audit-modal');
+            return !!(modal && modal.style.display === 'flex');
+        }
+
+        async function copyOSPatchAuditPayload() {
+            const body = document.getElementById('ospatch-audit-modal-body');
+            if (!body) return;
+
+            const text = body.textContent || '';
+            if (!text.trim()) {
+                showStatus('No payload content to copy.', 'error');
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const temp = document.createElement('textarea');
+                    temp.value = text;
+                    temp.setAttribute('readonly', '');
+                    temp.style.position = 'absolute';
+                    temp.style.left = '-9999px';
+                    document.body.appendChild(temp);
+                    temp.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(temp);
+                }
+                showStatus('Payload copied to clipboard.', 'success');
+            } catch (error) {
+                console.warn('Failed to copy payload:', error);
+                showStatus('Failed to copy payload.', 'error');
+            }
+        }
+
+        async function saveOSPatchSettings() {
+            const settings = gatherOSPatchSettingsFromUI();
+            if (settings.target_scope === 'agent' && !settings.target_agent_id) {
+                showStatus('Select a target agent for OS patch policy.', 'error');
+                return;
+            }
+            if (settings.target_scope === 'group' && !settings.target_group_id) {
+                showStatus('Select a target group for OS patch policy.', 'error');
+                return;
+            }
+            if (!settings.schedule_start_at) {
+                showStatus('Schedule start time is required for OS patch policy.', 'error');
+                return;
+            }
+
+            try {
+                cachedOSPatchPolicy = await apiFetch(api.osPatchPolicy, {
+                    method: 'PUT',
+                    body: JSON.stringify(settings)
+                });
+                renderOSPatchSummary();
+                await loadOSPatchAudit();
+                showStatus('OS patch policy saved.', 'success');
+            } catch (error) {
+                showStatus('Failed to save OS patch policy: ' + error.message, 'error');
+            }
+        }
+
+        async function resetOSPatchSettings() {
+            try {
+                cachedOSPatchPolicy = await apiFetch(api.osPatchPolicyReset, {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+                await initializeOSPatchSection();
+                renderOSPatchSummary();
+                await loadOSPatchAudit();
+                showStatus('OS patch policy reset to defaults.', 'success');
+            } catch (error) {
+                showStatus('Failed to reset OS patch policy: ' + error.message, 'error');
+            }
+        }
+
+        function recurrenceForOSPatch(type) {
+            switch ((type || '').toLowerCase()) {
+                case 'weekly':
+                    return { repeatSeconds: 0, recurrenceRule: 'weekly' };
+                case 'monthly':
+                    return { repeatSeconds: 0, recurrenceRule: 'monthly' };
+                case 'weekdays':
+                default:
+                    return { repeatSeconds: 0, recurrenceRule: 'weekdays' };
+            }
+        }
+
+        async function createOSPatchSchedule() {
+            const settings = gatherOSPatchSettingsFromUI();
+            if (!settings.enabled) {
+                showStatus('Enable OS Patch Option before creating schedule.', 'error');
+                return;
+            }
+            if (!settings.auto_schedule_enabled) {
+                showStatus('Enable Auto Schedule to create an OS patch schedule.', 'error');
+                return;
+            }
+            if (settings.target_scope === 'agent' && !settings.target_agent_id) {
+                showStatus('Select a target agent for OS patch schedule.', 'error');
+                return;
+            }
+            if (settings.target_scope === 'group' && !settings.target_group_id) {
+                showStatus('Select a target group for OS patch schedule.', 'error');
+                return;
+            }
+
+            const runAt = settings.schedule_start_at;
+            if (!runAt) {
+                showStatus('Schedule start time is required.', 'error');
+                return;
+            }
+
+            const rec = recurrenceForOSPatch(settings.auto_schedule_rule);
+            const payloadLines = [
+                '# OS Patch Management policy metadata',
+                `# approval_mode=${settings.kb_approval_mode}`,
+                `# auto_approve_days=${settings.auto_approval_after_days}`,
+                `# postpone_days=${settings.postpone_days}`,
+                `# approved_kbs=${(settings.approved_kbs || []).join('|')}`,
+                `# postponed_kbs=${(settings.postponed_kbs || []).join('|')}`,
+                '$ProgressPreference = "SilentlyContinue"',
+                'Write-Output "OS patch scan initiated"',
+                'UsoClient StartScan',
+                'Start-Sleep -Seconds 10',
+                'Write-Output "OS patch scan request submitted"'
+            ];
+
+            const body = {
+                name: `OS Patch Auto - ${settings.target_scope}`,
+                kind: 'script',
+                target_scope: settings.target_scope,
+                target_agent_id: settings.target_scope === 'agent' ? settings.target_agent_id : '',
+                target_group_id: settings.target_scope === 'group' ? settings.target_group_id : null,
+                command_type: 'powershell',
+                payload: payloadLines.join('\n'),
+                run_at: runAt,
+                repeat_interval_seconds: rec.repeatSeconds,
+                recurrence_rule: rec.recurrenceRule,
+                enabled: true,
+                next_run_at: runAt
+            };
+
+            try {
+                cachedOSPatchPolicy = await apiFetch(api.osPatchPolicy, {
+                    method: 'PUT',
+                    body: JSON.stringify(settings)
+                });
+
+                await apiFetch(api.schedules, {
+                    method: 'POST',
+                    body: JSON.stringify(body)
+                });
+
+                renderOSPatchSummary();
+                await loadOSPatchAudit();
+                showStatus('OS patch auto schedule created successfully.', 'success');
+                await loadAll();
+            } catch (error) {
+                showStatus('Failed to create OS patch schedule: ' + error.message, 'error');
+            }
+        }
+
+        async function createSchedule() {
+            const targetScope = document.getElementById('schedule-target-scope').value;
+            const name = (document.getElementById('schedule-name').value || '').trim();
+            const kind = document.getElementById('schedule-kind').value;
+            const commandType = (document.getElementById('schedule-command-type').value || '').trim();
+            const payload = (document.getElementById('schedule-payload').value || '').trim();
+            const targetAgent = (document.getElementById('schedule-target-agent').value || '').trim();
+            const targetGroup = toInt(document.getElementById('schedule-target-group').value);
+            const repeatSeconds = recurrenceSecondsFromUI();
+            const recurrenceRule = recurrenceRuleFromUI();
+            const runAt = toRFC3339(document.getElementById('schedule-run-at').value);
+
+            if (!name) {
+                showStatus('Schedule name is required.', 'error');
+                return;
+            }
+            if (!runAt) {
+                showStatus('Run At is required for schedule creation.', 'error');
+                return;
+            }
+            if (!payload) {
+                showStatus('Payload is required.', 'error');
+                return;
+            }
+            if (targetScope === 'agent' && !targetAgent) {
+                showStatus('Target Agent is required.', 'error');
+                return;
+            }
+            if (targetScope === 'group' && !targetGroup) {
+                showStatus('Target Group is required.', 'error');
+                return;
+            }
+            if (kind === 'command' && !commandType) {
+                showStatus('Command Type is required for kind=command.', 'error');
+                return;
+            }
+            if (repeatSeconds === null) {
+                showStatus('Recurrence interval must be a positive number.', 'error');
+                return;
+            }
+
+            const body = {
+                name,
+                kind,
+                target_scope: targetScope,
+                target_agent_id: targetScope === 'agent' ? targetAgent : '',
+                target_group_id: targetScope === 'group' ? targetGroup : null,
+                command_type: commandType,
+                payload,
+                run_at: runAt,
+                repeat_interval_seconds: repeatSeconds,
+                recurrence_rule: recurrenceRule,
+                enabled: document.getElementById('schedule-enabled').checked,
+                next_run_at: runAt
+            };
+
+            try {
+                await apiFetch(api.schedules, {
+                    method: 'POST',
+                    body: JSON.stringify(body)
+                });
+                showStatus('Schedule created successfully.', 'success');
+                await loadAll();
+            } catch (error) {
+                showStatus('Failed to create schedule: ' + error.message, 'error');
+            }
+        }
+
+        function formatRecurrence(seconds) {
+            const s = Number(seconds || 0);
+            if (!s) return 'Once';
+            if (s % 86400 === 0) return `Every ${s / 86400} day(s)`;
+            if (s % 3600 === 0) return `Every ${s / 3600} hour(s)`;
+            if (s % 60 === 0) return `Every ${s / 60} minute(s)`;
+            return `Every ${s} second(s)`;
+        }
+
+        function formatRecurrenceRule(rule) {
+            const value = (rule || '').toLowerCase().trim();
+            switch (value) {
+                case 'weekly':
+                    return 'Weekly';
+                case 'weekdays':
+                    return 'Weekdays (Mon-Fri)';
+                case 'monthly':
+                    return 'Monthly';
+                case 'first_day_of_month':
+                    return 'First day of month';
+                case 'last_day_of_month':
+                    return 'Last day of month';
+                case 'first_weekday_of_month':
+                    return 'First weekday of month';
+                case 'last_weekday_of_month':
+                    return 'Last weekday of month';
+                default:
+                    return '';
+            }
+        }
+
+        function renderSchedules(schedules) {
+            const table = document.getElementById('schedule-table');
+            const rows = schedules.map(item => {
+                const target = item.target_scope === 'group'
+                    ? `group:${item.target_group_id || '-'}`
+                    : `agent:${item.target_agent_id || '-'}`;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.kind}</td>
+                <td>${target}</td>
+                <td>${item.command_type || '-'}</td>
+                <td>${formatDateTime(item.next_run_at)}</td>
+                <td>${formatRecurrenceRule(item.recurrence_rule) || formatRecurrence(item.repeat_interval_seconds)}</td>
+                <td><span class="pill">${item.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td>
+                    <button class="small-btn" onclick="editSchedule(${item.id})">Edit</button>
+                    <button class="primary-btn" onclick="toggleScheduleEnabled(${item.id})">${item.enabled ? 'Disable' : 'Enable'}</button>
+                    <button class="danger-btn" onclick="deleteSchedule(${item.id})">Delete</button>
+                </td>`;
+                return tr;
+            });
+            renderTable(table, ['ID', 'Name', 'Kind', 'Target', 'Command', 'Next Run', 'Recurrence', 'Status', ''], rows);
+        }
+
+        async function toggleScheduleEnabled(id) {
+            const schedule = (cachedData.schedules || []).find(item => item.id === id);
+            if (!schedule) {
+                showStatus('Schedule not found in cache. Refresh and try again.', 'error');
+                return;
+            }
+
+            await apiFetch(api.schedules + '/' + id, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    name: schedule.name,
+                    kind: schedule.kind,
+                    target_scope: schedule.target_scope,
+                    target_agent_id: schedule.target_agent_id || '',
+                    target_group_id: schedule.target_group_id || null,
+                    command_type: schedule.command_type || '',
+                    payload: schedule.payload,
+                    run_at: schedule.run_at,
+                    repeat_interval_seconds: Number(schedule.repeat_interval_seconds || 0),
+                    recurrence_rule: schedule.recurrence_rule || '',
+                    enabled: !schedule.enabled,
+                    next_run_at: schedule.next_run_at || schedule.run_at
+                })
+            });
+
+            await loadAll();
+        }
+
+        async function deleteSchedule(id) {
+            await apiFetch(api.schedules + '/' + id, {
+                method: 'DELETE'
+            });
+            await loadAll();
+        }
+
+        async function editSchedule(id) {
+            const item = (cachedData.schedules || []).find(schedule => schedule.id === id);
+            if (!item) {
+                showStatus('Schedule not found in cache. Refresh and try again.', 'error');
+                return;
+            }
+
+            const payload = await editJSONPrompt('Edit Schedule JSON', {
+                name: item.name,
+                kind: item.kind,
+                target_scope: item.target_scope,
+                target_agent_id: item.target_agent_id || '',
+                target_group_id: item.target_group_id || null,
+                command_type: item.command_type || '',
+                payload: item.payload,
+                run_at: item.run_at,
+                repeat_interval_seconds: Number(item.repeat_interval_seconds || 0),
+                recurrence_rule: item.recurrence_rule || '',
+                enabled: Boolean(item.enabled),
+                next_run_at: item.next_run_at || item.run_at
+            });
+
+            if (payload === null || payload === undefined) {
+                return;
+            }
+
+            await apiFetch(api.schedules + '/' + id, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            await loadAll();
+        }
+
         function toInt(value) {
             if (!value) return null;
             const parsed = parseInt(value, 10);
@@ -687,7 +2122,7 @@
             const rows = categories.map(item => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.description || '-'}</td>
-                <td><button class="danger-btn" onclick="deleteCategory(${item.id})">Delete</button></td>`;
+                <td><button class="small-btn" onclick="editCategory(${item.id})">Edit</button> <button class="danger-btn" onclick="deleteCategory(${item.id})">Delete</button></td>`;
                 return tr;
             });
             renderTable(table, ['ID', 'Name', 'Description', ''], rows);
@@ -700,7 +2135,7 @@
                 tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.max_concurrent_scripts}</td>
                 <td><span class="pill">${item.online_only ? 'Online only' : 'Any state'}</span></td>
                 <td class="muted">${JSON.stringify(item.patch_windows)}</td>
-                <td><button class="danger-btn" onclick="deletePolicy(${item.id})">Delete</button></td>`;
+                <td><button class="small-btn" onclick="editPolicy(${item.id})">Edit</button> <button class="danger-btn" onclick="deletePolicy(${item.id})">Delete</button></td>`;
                 return tr;
             });
             renderTable(table, ['ID', 'Name', 'Max Scripts', 'Mode', 'Patch Windows', ''], rows);
@@ -713,7 +2148,7 @@
                 tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.run_as}</td>
                 <td>${item.timeout_seconds}s</td><td>${item.retries}</td>
                 <td>${item.reboot_behavior}</td>
-                <td><button class="danger-btn" onclick="deleteProfile('${kind}', ${item.id})">Delete</button></td>`;
+                <td><button class="small-btn" onclick="editProfile('${kind}', ${item.id})">Edit</button> <button class="danger-btn" onclick="deleteProfile('${kind}', ${item.id})">Delete</button></td>`;
                 return tr;
             });
             renderTable(table, ['ID', 'Name', 'Run As', 'Timeout', 'Retries', 'Reboot', ''], rows);
@@ -734,7 +2169,7 @@
                 <td>${policyName}</td>
                 <td>${scriptName}</td>
                 <td>${patchName}</td>
-                <td><button class="danger-btn" onclick="deleteGroup(${item.id})">Delete</button></td>`;
+                <td><button class="small-btn" onclick="editGroup(${item.id})">Edit</button> <button class="danger-btn" onclick="deleteGroup(${item.id})">Delete</button></td>`;
                 return tr;
             });
             renderTable(table, ['ID', 'Name', 'Category', 'Policy', 'Script', 'Patch', ''], rows);
@@ -815,8 +2250,58 @@
             await loadAll();
         }
 
+        async function editCategory(id) {
+            const item = (cachedData.categories || []).find(category => category.id === id);
+            if (!item) {
+                showStatus('Category not found in cache. Refresh and try again.', 'error');
+                return;
+            }
+
+            const payload = await editJSONPrompt('Edit Category JSON', {
+                name: item.name,
+                description: item.description || ''
+            });
+            if (payload === null || payload === undefined) {
+                return;
+            }
+
+            await apiFetch(api.categories + '/' + id, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            await loadAll();
+        }
+
         async function deletePolicy(id) {
             await apiFetch(api.policies + '/' + id, { method: 'DELETE' });
+            await loadAll();
+        }
+
+        async function editPolicy(id) {
+            const item = (cachedData.policies || []).find(policy => policy.id === id);
+            if (!item) {
+                showStatus('Policy not found in cache. Refresh and try again.', 'error');
+                return;
+            }
+
+            const payload = await editJSONPrompt('Edit Group Policy JSON', {
+                name: item.name,
+                description: item.description || '',
+                script_allowlist: item.script_allowlist || [],
+                script_denylist: item.script_denylist || [],
+                patch_windows: item.patch_windows || [],
+                max_concurrent_scripts: Number(item.max_concurrent_scripts || 1),
+                require_admin_approval: Boolean(item.require_admin_approval),
+                online_only: Boolean(item.online_only)
+            });
+            if (payload === null || payload === undefined) {
+                return;
+            }
+
+            await apiFetch(api.policies + '/' + id, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
             await loadAll();
         }
 
@@ -826,8 +2311,62 @@
             await loadAll();
         }
 
+        async function editProfile(kind, id) {
+            const list = kind === 'script' ? (cachedData.scripts || []) : (cachedData.patches || []);
+            const item = list.find(profile => profile.id === id);
+            if (!item) {
+                showStatus('Profile not found in cache. Refresh and try again.', 'error');
+                return;
+            }
+
+            const payload = await editJSONPrompt('Edit ' + (kind === 'script' ? 'Script' : 'Patch') + ' Profile JSON', {
+                name: item.name,
+                run_as: item.run_as,
+                timeout_seconds: Number(item.timeout_seconds || 0),
+                retries: Number(item.retries || 0),
+                reboot_behavior: item.reboot_behavior || 'none',
+                working_dir: item.working_dir || '',
+                env_vars: item.env_vars || {}
+            });
+            if (payload === null || payload === undefined) {
+                return;
+            }
+
+            const url = kind === 'script' ? api.scripts : api.patches;
+            await apiFetch(url + '/' + id, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            await loadAll();
+        }
+
         async function deleteGroup(id) {
             await apiFetch(api.groups + '/' + id, { method: 'DELETE' });
+            await loadAll();
+        }
+
+        async function editGroup(id) {
+            const item = (cachedData.groups || []).find(group => group.id === id);
+            if (!item) {
+                showStatus('Group not found in cache. Refresh and try again.', 'error');
+                return;
+            }
+
+            const payload = await editJSONPrompt('Edit Agent Group JSON', {
+                name: item.name,
+                category_id: item.category_id || null,
+                policy_id: item.policy_id || null,
+                script_profile_id: item.script_profile_id || null,
+                patch_profile_id: item.patch_profile_id || null
+            });
+            if (payload === null || payload === undefined) {
+                return;
+            }
+
+            await apiFetch(api.groups + '/' + id, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
             await loadAll();
         }
 
@@ -839,6 +2378,66 @@
         document.getElementById('member-group').addEventListener('change', (event) => {
             loadMembers(event.target.value);
         });
+
+        const thresholdProfileSelect = document.getElementById('threshold-profile-select');
+        if (thresholdProfileSelect) {
+            thresholdProfileSelect.addEventListener('change', onThresholdProfileSelectChange);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (isJSONEditModalOpen()) {
+                const isMeta = event.ctrlKey || event.metaKey;
+                const isSaveShortcut = isMeta && (event.key === 's' || event.key === 'S');
+                const isTidyShortcut = isMeta && event.shiftKey && (event.key === 'f' || event.key === 'F');
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeJSONEditModal();
+                    return;
+                }
+
+                if (isSaveShortcut) {
+                    event.preventDefault();
+                    saveJSONEditModal();
+                    return;
+                }
+
+                if (isTidyShortcut) {
+                    event.preventDefault();
+                    formatJSONEditValue();
+                    return;
+                }
+            }
+
+            if (!isOSPatchAuditModalOpen()) {
+                return;
+            }
+
+            const targetTag = ((event.target && event.target.tagName) || '').toLowerCase();
+            const isEditable = targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select' || (event.target && event.target.isContentEditable);
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeOSPatchAuditModal();
+                return;
+            }
+
+            const isCopyShortcut = (event.ctrlKey || event.metaKey) && (event.key === 'c' || event.key === 'C');
+            if (isCopyShortcut) {
+                event.preventDefault();
+                copyOSPatchAuditPayload();
+                return;
+            }
+
+            if (!isEditable && event.key === 'Enter') {
+                event.preventDefault();
+                copyOSPatchAuditPayload();
+            }
+        });
+
+        onScheduleTargetScopeChange();
+        onScheduleRecurrenceChange();
+        initializeScheduleDefaults();
 
         loadAll().then(() => {
             setupAgentAutocomplete();

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shafraz007/ai-endpoint-platform/internal/config"
 	"github.com/shafraz007/ai-endpoint-platform/internal/server"
 )
@@ -50,6 +51,21 @@ type groupMemberRequest struct {
 	AgentID string `json:"agent_id"`
 }
 
+type osPatchPolicyRequest struct {
+	Enabled             bool      `json:"enabled"`
+	TargetScope         string    `json:"target_scope"`
+	TargetAgentID       string    `json:"target_agent_id,omitempty"`
+	TargetGroupID       *int      `json:"target_group_id,omitempty"`
+	KBApprovalMode      string    `json:"kb_approval_mode"`
+	AutoApprovalAfter   int       `json:"auto_approval_after_days"`
+	PostponeDays        int       `json:"postpone_days"`
+	AutoScheduleEnabled bool      `json:"auto_schedule_enabled"`
+	AutoScheduleRule    string    `json:"auto_schedule_rule"`
+	ScheduleStartAt     time.Time `json:"schedule_start_at"`
+	ApprovedKBs         []string  `json:"approved_kbs"`
+	PostponedKBs        []string  `json:"postponed_kbs"`
+}
+
 func governancePageHandler(cfg config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -67,6 +83,206 @@ func governancePageHandler(cfg config.ServerConfig) http.HandlerFunc {
 		_ = settingsTemplate.Execute(w, map[string]interface{}{
 			"Now": time.Now().Format("2006-01-02 15:04:05"),
 		})
+	}
+}
+
+func osPatchPolicyHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, user, err := authorizeAdminRequest(w, r, cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+
+			policy, err := server.GetOSPatchPolicy(ctx)
+			if err != nil {
+				if err == pgx.ErrNoRows {
+					http.Error(w, "OS patch policy not initialized", http.StatusNotFound)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			respondJSON(w, http.StatusOK, policy)
+
+		case http.MethodPut:
+			var req osPatchPolicyRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				return
+			}
+
+			policy := server.OSPatchPolicy{
+				Enabled:             req.Enabled,
+				TargetScope:         req.TargetScope,
+				TargetAgentID:       req.TargetAgentID,
+				TargetGroupID:       req.TargetGroupID,
+				KBApprovalMode:      req.KBApprovalMode,
+				AutoApprovalAfter:   req.AutoApprovalAfter,
+				PostponeDays:        req.PostponeDays,
+				AutoScheduleEnabled: req.AutoScheduleEnabled,
+				AutoScheduleRule:    req.AutoScheduleRule,
+				ScheduleStartAt:     req.ScheduleStartAt,
+				ApprovedKBs:         req.ApprovedKBs,
+				PostponedKBs:        req.PostponedKBs,
+			}
+
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+
+			saved, err := server.UpsertOSPatchPolicy(ctx, policy, user.Username)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			respondJSON(w, http.StatusOK, saved)
+
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+func osPatchPolicyResetHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		_, user, err := authorizeAdminRequest(w, r, cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		policy, resetErr := server.ResetOSPatchPolicy(ctx, user.Username)
+		if resetErr != nil {
+			http.Error(w, resetErr.Error(), http.StatusBadRequest)
+			return
+		}
+
+		respondJSON(w, http.StatusOK, policy)
+	}
+}
+
+func osPatchPolicyAuditHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if _, _, err := authorizeAdminRequest(w, r, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		limit := 50
+		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+			if parsed, parseErr := strconv.Atoi(raw); parseErr == nil {
+				limit = parsed
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		entries, listErr := server.ListOSPatchPolicyAudit(ctx, limit)
+		if listErr != nil {
+			http.Error(w, listErr.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		respondJSON(w, http.StatusOK, entries)
+	}
+}
+
+func osPatchUpdatesHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if _, _, err := authorizeAdminRequest(w, r, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		limit := 500
+		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+			if parsed, parseErr := strconv.Atoi(raw); parseErr == nil {
+				limit = parsed
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+		defer cancel()
+
+		items, err := server.ListAggregatedPatchUpdates(ctx, limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		respondJSON(w, http.StatusOK, items)
+	}
+}
+
+func osPatchUpdatesActionHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		_, user, err := authorizeAdminRequest(w, r, cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var req struct {
+			AgentID string `json:"agent_id"`
+			KBID    string `json:"kb_id"`
+			Action  string `json:"action"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		action := strings.ToLower(strings.TrimSpace(req.Action))
+		if action == "approve" {
+			action = "approved"
+		}
+		if action == "postpone" {
+			action = "postponed"
+		}
+
+		postponeDays := 0
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		if policy, pErr := server.GetOSPatchPolicy(ctx); pErr == nil && policy != nil {
+			postponeDays = policy.PostponeDays
+		}
+
+		if err := server.UpsertAgentPatchOverride(ctx, req.AgentID, req.KBID, action, user.Username, postponeDays); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

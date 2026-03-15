@@ -2,9 +2,12 @@ package agent
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	gnet "github.com/shirou/gopsutil/v3/net"
 )
@@ -18,6 +21,11 @@ type MetricsSnapshot struct {
 	NetBytesRecvPerSec   float64
 	NetPacketsSentPerSec float64
 	NetPacketsRecvPerSec float64
+	CPUTemperatureC      *float64
+	DiskTemperatureC     *float64
+	DiskUsagePercent     *float64
+	FanCPURPM            *float64
+	FanSystemRPM         *float64
 }
 
 type MetricsCollector struct {
@@ -61,6 +69,9 @@ func (c *MetricsCollector) Sample() (*MetricsSnapshot, error) {
 	c.lastNet = &current
 	c.lastTime = now
 
+	diskUsagePercent := sampleMaxDiskUsagePercent()
+	cpuTemp, diskTemp := sampleTemperatureTelemetry()
+
 	return &MetricsSnapshot{
 		CPUPercent:           cpuPercents[0],
 		MemoryUsedPercent:    memStat.UsedPercent,
@@ -70,5 +81,77 @@ func (c *MetricsCollector) Sample() (*MetricsSnapshot, error) {
 		NetBytesRecvPerSec:   recvPerSec,
 		NetPacketsSentPerSec: sentPacketsPerSec,
 		NetPacketsRecvPerSec: recvPacketsPerSec,
+		CPUTemperatureC:      cpuTemp,
+		DiskTemperatureC:     diskTemp,
+		DiskUsagePercent:     diskUsagePercent,
+		FanCPURPM:            nil,
+		FanSystemRPM:         nil,
 	}, nil
+}
+
+func sampleMaxDiskUsagePercent() *float64 {
+	partitions, err := disk.Partitions(false)
+	if err != nil {
+		return nil
+	}
+
+	maxUsage := -1.0
+	for _, partition := range partitions {
+		if strings.TrimSpace(partition.Mountpoint) == "" {
+			continue
+		}
+		usage, usageErr := disk.Usage(partition.Mountpoint)
+		if usageErr != nil {
+			continue
+		}
+		if usage.UsedPercent > maxUsage {
+			maxUsage = usage.UsedPercent
+		}
+	}
+
+	if maxUsage < 0 {
+		return nil
+	}
+	value := maxUsage
+	return &value
+}
+
+func sampleTemperatureTelemetry() (*float64, *float64) {
+	entries, err := host.SensorsTemperatures()
+	if err != nil {
+		return nil, nil
+	}
+
+	maxCPU := -1.0
+	maxDisk := -1.0
+	for _, entry := range entries {
+		label := strings.ToLower(strings.TrimSpace(entry.SensorKey))
+		if entry.Temperature <= 0 {
+			continue
+		}
+
+		if strings.Contains(label, "cpu") || strings.Contains(label, "core") || strings.Contains(label, "package") {
+			if entry.Temperature > maxCPU {
+				maxCPU = entry.Temperature
+			}
+		}
+		if strings.Contains(label, "disk") || strings.Contains(label, "hdd") || strings.Contains(label, "ssd") || strings.Contains(label, "nvme") || strings.Contains(label, "drive") {
+			if entry.Temperature > maxDisk {
+				maxDisk = entry.Temperature
+			}
+		}
+	}
+
+	var cpuTempPtr *float64
+	var diskTempPtr *float64
+	if maxCPU > 0 {
+		value := maxCPU
+		cpuTempPtr = &value
+	}
+	if maxDisk > 0 {
+		value := maxDisk
+		diskTempPtr = &value
+	}
+
+	return cpuTempPtr, diskTempPtr
 }

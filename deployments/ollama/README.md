@@ -29,7 +29,7 @@ Ollama Docker setup (Linux)
 6) Point agent to Ollama
 
   export AGENT_AI_PROVIDER=ollama
-  export AGENT_AI_ENDPOINT=http://localhost:11434/v1/chat/completions
+  export AGENT_AI_ENDPOINT=http://localhost:11434/api/chat
   export AGENT_AI_MODEL=llama3.2
   export AGENT_AI_API_KEY=
 
@@ -39,3 +39,5 @@ Notes
 - Data is persisted in Docker volume ollama_data.
 - Stop with: docker compose down
 - Remove data with: docker volume rm deployments_ollama_data (project/volume name may vary)
+- Native Ollama endpoint (`/api/chat`) is preferred and uses non-streaming payload mode in agent requests.
+- OpenAI-compatible endpoint (`/v1/chat/completions`) remains supported for compatibility.

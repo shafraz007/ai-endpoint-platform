@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Personal and global chat APIs with UI integration in dashboard and agent detail views
 - Governance settings page and CRUD endpoints for categories, policies, profiles, groups, and members
 - Governance policy merge resolver for agent command allow/deny evaluation across group memberships
+- Schedule engine for `task`, `command`, and `script` workloads with DB-backed definitions, admin APIs, and background dispatch into the command queue
+- Dedicated OS patch policy persistence and APIs (`/api/os-patch/policy`, reset, audit)
+- Execution reports API for scheduled workloads
+- Per-chat and global notification bell indicators with unread counters
+- Immediate personal-chat progress relay (`Working on your request...`) when `ai_task` dequeues
+- Hybrid personal-chat memory flow (server-side compact conversation context + bounded agent in-memory turns)
+- Global chat session-memory persistence (`global_chat_session_memory`) with periodic summary compaction
+- Durable issue detection and alerting system for heartbeat and metrics detectors with remediation APIs (`/api/issues`, `/api/issues/{id}`, `/api/issues/{id}/actions`)
+- Issue action audit trail persistence (`issue_action_audit`) with command/schedule linkage for operational traceability
+- Curated global chat tools: `fleet_health`, `resolve_issue`, and `set_patch_policy`
+- Dedicated `cmd/chat-worker` runtime logging integration with daily rotating log files
+- Queue subscriber consumer-group support for shared chat-worker consumption
+- Chat task retry metadata fields (`attempt`, `max_attempts`, `dedupe_key`) in queue payload
+- Chat-worker retry/backoff + dead-letter handling for terminal queue processing failures
+- Queue tuning settings for worker retries and DLQ routing (`QUEUE_AGENT_CHAT_MAX_ATTEMPTS`, `QUEUE_AGENT_CHAT_DLQ_SUBJECT`)
+- Windows agent process singleton guard to prevent multi-instance duplication noise
+- DLQ inspection helper script: `scripts/show-chat-dlq.ps1`
 
 ### Changed
 
@@ -21,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chat-triggered command execution now enforces governance `script_allowlist` and `script_denylist` before command queueing
 - Governance query prompts such as "is format command allowed" now return deterministic policy-based answers from server state instead of LLM interpretation
 - Command acknowledgement path relays `ai_task` output back into personal chat as structured agent responses
+- Ping execution is constrained to explicit ping syntax to avoid accidental command triggering from unrelated prompts
+- Install-updates requests are handled through explicit update execution path instead of ambiguous model intent
+- Agent command result formatting now shortens multiline script headers (for example, `powershell script`) for cleaner chat output
+- Scheduler dispatch now deduplicates in-flight power commands per agent, skipping duplicate `restart`/`shutdown` enqueue while same type is already `queued` or `dispatched`
+- Global AI prompt assembly now injects compact session memory summaries and preserves assistant turns in recent-context replay
+- Agent Ollama local endpoint handling now prefers native `/api/chat` path for localhost `11434` targets
+- Native Ollama request payload now explicitly uses non-streaming mode for deterministic parsing
+- Queue path idempotency for chat `ai_task` command creation hardened to avoid duplicate queue-side inserts
 
 ## [1.2.0] - 2026-02-17
 

@@ -64,6 +64,7 @@ func GetSystemInfo() (*SystemInfo, error) {
 	privateIP := getPrivateIP()
 	timezone := getTimezone()
 	lastReboot := getLastReboot()
+	lastLogin := getLastLogin()
 
 	// Collect hardware information
 	hardwareVendor := getHardwareVendor()
@@ -98,6 +99,7 @@ func GetSystemInfo() (*SystemInfo, error) {
 		Domain:               domain,
 		PublicIP:             publicIP,
 		PrivateIP:            privateIP,
+		LastLogin:            lastLogin,
 		LastReboot:           lastReboot,
 		Timezone:             timezone,
 		AgentVersion:         agentVersion,
@@ -117,6 +119,11 @@ func GetSystemInfo() (*SystemInfo, error) {
 		DisksJSON:            disksJSON,
 		DrivesJSON:           drivesJSON,
 	}, nil
+}
+
+// GetLoginAndRebootTimes collects dynamic session timestamps.
+func GetLoginAndRebootTimes() (*time.Time, *time.Time) {
+	return getLastLogin(), getLastReboot()
 }
 
 // getWindowsPhysicalDisksJSON queries physical disks and returns JSON array string.
@@ -277,6 +284,30 @@ func getTimezone() string {
 	return name
 }
 
+func getLastLogin() *time.Time {
+	if runtime.GOOS == "windows" {
+		return getLastLoginWindows()
+	}
+	return nil
+}
+
+func getLastLoginWindows() *time.Time {
+	psScript := `
+$ErrorActionPreference = 'SilentlyContinue'
+try {
+    $profiles = Get-CimInstance Win32_NetworkLoginProfile -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastLogon -and $_.Name -ne 'ANONYMOUS LOGON' }
+    $latest = $profiles | Sort-Object LastLogon -Descending | Select-Object -First 1
+    if ($latest -and $latest.LastLogon) {
+        [Management.ManagementDateTimeConverter]::ToDateTime($latest.LastLogon).ToUniversalTime().ToString('o')
+    }
+} catch {
+}
+`
+
+	return runPowerShellTimestamp(psScript)
+}
+
 func getLastReboot() *time.Time {
 	// Windows: Use `wmic os get lastbootuptime`
 	// Linux: Use `/proc/uptime` or `systemctl show`
@@ -292,14 +323,50 @@ func getLastReboot() *time.Time {
 }
 
 func getLastRebootWindows() *time.Time {
-	// Placeholder - in production, parse wmic output
-	// cmd: wmic os get lastbootuptime /format:value
-	return nil
+	psScript := `
+$ErrorActionPreference = 'SilentlyContinue'
+try {
+	$os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+	if ($os -and $os.LastBootUpTime) {
+		if ($os.LastBootUpTime -is [datetime]) {
+			$os.LastBootUpTime.ToUniversalTime().ToString('o')
+		} else {
+			[Management.ManagementDateTimeConverter]::ToDateTime($os.LastBootUpTime).ToUniversalTime().ToString('o')
+		}
+	}
+} catch {
+}
+`
+
+	return runPowerShellTimestamp(psScript)
 }
 
 func getLastRebootLinux() *time.Time {
 	// Placeholder - in production, parse /proc/uptime
 	return nil
+}
+
+func runPowerShellTimestamp(psScript string) *time.Time {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NoLogo", "-NonInteractive", "-Command", psScript)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	value := strings.TrimSpace(string(out))
+	if value == "" {
+		return nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return nil
+	}
+
+	return &parsed
 }
 
 // Hardware information collection functions

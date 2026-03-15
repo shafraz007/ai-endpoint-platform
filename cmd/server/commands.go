@@ -248,6 +248,8 @@ func commandPollHandler(cfg config.ServerConfig) http.HandlerFunc {
 			return
 		}
 
+		relayAgentProgressToChat(ctx, cmd)
+
 		resp := transport.Command{
 			ID:          cmd.ID,
 			AgentID:     cmd.AgentID,
@@ -259,6 +261,56 @@ func commandPollHandler(cfg config.ServerConfig) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}
+}
+
+func relayAgentProgressToChat(ctx context.Context, command *server.AgentCommand) {
+	if command == nil {
+		return
+	}
+	if strings.ToLower(strings.TrimSpace(command.CommandType)) != "ai_task" {
+		return
+	}
+
+	task, err := ai.ParseTaskPayload(command.Payload)
+	if err != nil {
+		return
+	}
+
+	if !strings.HasPrefix(strings.TrimSpace(task.TaskID), "chatmsg-") {
+		return
+	}
+
+	instruction := extractCurrentInstructionSnippet(task.Instruction)
+	message := "Working on your request..."
+	if instruction != "" {
+		quoted := strings.ReplaceAll(instruction, "\"", "'")
+		message = message + "\n\"" + quoted + "\""
+	}
+
+	sender := "agent:" + command.AgentID
+	_, _ = server.CreateChatMessage(ctx, server.ChatScopeAgent, command.AgentID, sender, message)
+}
+
+func extractCurrentInstructionSnippet(instruction string) string {
+	instruction = strings.TrimSpace(instruction)
+	if instruction == "" {
+		return ""
+	}
+
+	marker := "Current user message:"
+	if idx := strings.Index(instruction, marker); idx >= 0 {
+		instruction = strings.TrimSpace(instruction[idx+len(marker):])
+		if memIdx := strings.Index(instruction, "Conversation memory:"); memIdx >= 0 {
+			instruction = strings.TrimSpace(instruction[:memIdx])
+		}
+	}
+
+	const max = 180
+	if len(instruction) > max {
+		instruction = strings.TrimSpace(instruction[:max-3]) + "..."
+	}
+
+	return instruction
 }
 
 func commandAckHandler(cfg config.ServerConfig) http.HandlerFunc {
@@ -323,6 +375,7 @@ func relayAgentReplyToChat(ctx context.Context, command *server.AgentCommand, st
 	if command == nil {
 		return
 	}
+
 	if strings.ToLower(strings.TrimSpace(command.CommandType)) != "ai_task" {
 		return
 	}

@@ -42,6 +42,54 @@ var migrations = []Migration{
 		Name: "007_create_chat_messages_table_v1_6_0",
 		Up:   createChatMessagesTableV1,
 	},
+	{
+		Name: "008_create_schedules_table_v1_7_0",
+		Up:   createSchedulesTableV1,
+	},
+	{
+		Name: "009_add_schedule_recurrence_rule_v1_7_1",
+		Up:   addScheduleRecurrenceRuleV1,
+	},
+	{
+		Name: "010_add_schedule_id_to_agent_commands_v1_7_2",
+		Up:   addScheduleIDToAgentCommandsV1,
+	},
+	{
+		Name: "011_create_os_patch_policies_table_v1_8_0",
+		Up:   createOSPatchPoliciesTableV1,
+	},
+	{
+		Name: "012_create_os_patch_policy_audit_table_v1_8_1",
+		Up:   createOSPatchPolicyAuditTableV1,
+	},
+	{
+		Name: "013_create_agent_patch_inventory_v1_9_0",
+		Up:   createAgentPatchInventoryV1,
+	},
+	{
+		Name: "014_create_agent_issues_table_v2_0_0",
+		Up:   createAgentIssuesTableV2,
+	},
+	{
+		Name: "015_create_issue_threshold_profiles_v2_1_0",
+		Up:   createIssueThresholdProfilesV2,
+	},
+	{
+		Name: "016_add_issue_mute_controls_v2_2_0",
+		Up:   addIssueMuteControlsV2,
+	},
+	{
+		Name: "017_add_patch_inventory_installed_at_v2_3_0",
+		Up:   addPatchInventoryInstalledAtV2,
+	},
+	{
+		Name: "018_add_global_chat_sessions_v2_4_0",
+		Up:   addGlobalChatSessionsV2,
+	},
+	{
+		Name: "019_add_global_chat_session_memory_v2_5_0",
+		Up:   addGlobalChatSessionMemoryV2,
+	},
 }
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -355,12 +403,551 @@ func createChatMessagesTableV1(ctx context.Context, db *pgxpool.Pool) error {
 	return err
 }
 
+func createSchedulesTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS schedules (
+		id BIGSERIAL PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		kind VARCHAR(20) NOT NULL,
+		target_scope VARCHAR(20) NOT NULL,
+		target_agent_id VARCHAR(255) REFERENCES agents(agent_id) ON DELETE CASCADE,
+		target_group_id INT REFERENCES agent_groups(id) ON DELETE CASCADE,
+		command_type VARCHAR(50),
+		payload TEXT NOT NULL,
+		run_at TIMESTAMP NOT NULL,
+		repeat_interval_seconds INT NOT NULL DEFAULT 0,
+		enabled BOOLEAN NOT NULL DEFAULT true,
+		last_run_at TIMESTAMP,
+		next_run_at TIMESTAMP NOT NULL,
+		created_by VARCHAR(255),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules(next_run_at);
+	CREATE INDEX IF NOT EXISTS idx_schedules_enabled_next_run ON schedules(enabled, next_run_at);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addScheduleRecurrenceRuleV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE schedules ADD COLUMN IF NOT EXISTS recurrence_rule VARCHAR(64);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addScheduleIDToAgentCommandsV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agent_commands ADD COLUMN IF NOT EXISTS schedule_id BIGINT REFERENCES schedules(id) ON DELETE SET NULL;
+	CREATE INDEX IF NOT EXISTS idx_agent_commands_schedule_id ON agent_commands(schedule_id);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createOSPatchPoliciesTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS os_patch_policies (
+		id SERIAL PRIMARY KEY,
+		singleton_key SMALLINT NOT NULL DEFAULT 1 UNIQUE,
+		enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		target_scope VARCHAR(20) NOT NULL DEFAULT 'agent',
+		target_agent_id VARCHAR(255) REFERENCES agents(agent_id) ON DELETE SET NULL,
+		target_group_id INT REFERENCES agent_groups(id) ON DELETE SET NULL,
+		kb_approval_mode VARCHAR(20) NOT NULL DEFAULT 'manual',
+		auto_approval_after_days INT NOT NULL DEFAULT 7,
+		postpone_days INT NOT NULL DEFAULT 0,
+		auto_schedule_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		auto_schedule_rule VARCHAR(32) NOT NULL DEFAULT 'weekdays',
+		schedule_start_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		approved_kbs TEXT NOT NULL DEFAULT '[]',
+		postponed_kbs TEXT NOT NULL DEFAULT '[]',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	INSERT INTO os_patch_policies (
+		singleton_key, enabled, target_scope, kb_approval_mode,
+		auto_approval_after_days, postpone_days, auto_schedule_enabled,
+		auto_schedule_rule, schedule_start_at, approved_kbs, postponed_kbs
+	)
+	VALUES (1, TRUE, 'agent', 'manual', 7, 0, TRUE, 'weekdays', CURRENT_TIMESTAMP, '[]', '[]')
+	ON CONFLICT (singleton_key) DO NOTHING;
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createOSPatchPolicyAuditTableV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS os_patch_policy_audit (
+		id BIGSERIAL PRIMARY KEY,
+		policy_id INT REFERENCES os_patch_policies(id) ON DELETE SET NULL,
+		action VARCHAR(32) NOT NULL,
+		changed_by VARCHAR(255) NOT NULL DEFAULT 'system',
+		payload TEXT NOT NULL DEFAULT '{}',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_os_patch_policy_audit_policy_id ON os_patch_policy_audit(policy_id);
+	CREATE INDEX IF NOT EXISTS idx_os_patch_policy_audit_created_at ON os_patch_policy_audit(created_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createAgentPatchInventoryV1(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS reboot_required BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS patch_scan_at TIMESTAMP;
+
+	CREATE TABLE IF NOT EXISTS agent_patch_updates (
+		id BIGSERIAL PRIMARY KEY,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		update_id VARCHAR(128) NOT NULL,
+		kb_id VARCHAR(32),
+		title TEXT NOT NULL,
+		description TEXT,
+		severity VARCHAR(64),
+		categories TEXT NOT NULL DEFAULT '[]',
+		is_driver BOOLEAN NOT NULL DEFAULT FALSE,
+		is_security BOOLEAN NOT NULL DEFAULT FALSE,
+		is_critical BOOLEAN NOT NULL DEFAULT FALSE,
+		is_os BOOLEAN NOT NULL DEFAULT FALSE,
+		is_software BOOLEAN NOT NULL DEFAULT TRUE,
+		reboot_required BOOLEAN NOT NULL DEFAULT FALSE,
+		installed BOOLEAN NOT NULL DEFAULT FALSE,
+		first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		raw_json TEXT NOT NULL DEFAULT '{}',
+		UNIQUE(agent_id, update_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS agent_patch_overrides (
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		kb_id VARCHAR(32) NOT NULL,
+		action VARCHAR(16) NOT NULL,
+		postponed_until TIMESTAMP,
+		updated_by VARCHAR(255) NOT NULL DEFAULT 'system',
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (agent_id, kb_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_patch_updates_agent_pending ON agent_patch_updates(agent_id, installed, is_critical, is_security, is_driver);
+	CREATE INDEX IF NOT EXISTS idx_agent_patch_updates_last_seen ON agent_patch_updates(last_seen_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createAgentIssuesTableV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS agent_issues (
+		id BIGSERIAL PRIMARY KEY,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		issue_key VARCHAR(160) NOT NULL,
+		category VARCHAR(64) NOT NULL,
+		severity VARCHAR(16) NOT NULL,
+		status VARCHAR(16) NOT NULL DEFAULT 'active',
+		title VARCHAR(255) NOT NULL,
+		description TEXT NOT NULL,
+		source VARCHAR(64) NOT NULL,
+		evidence TEXT NOT NULL DEFAULT '{}',
+		suggestions TEXT NOT NULL DEFAULT '[]',
+		action_plan TEXT NOT NULL DEFAULT '[]',
+		recommended_actions TEXT NOT NULL DEFAULT '[]',
+		first_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		resolved_at TIMESTAMP,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(agent_id, issue_key)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_issues_agent_status ON agent_issues(agent_id, status, severity);
+	CREATE INDEX IF NOT EXISTS idx_agent_issues_last_seen ON agent_issues(last_seen_at DESC);
+
+	CREATE TABLE IF NOT EXISTS issue_action_audit (
+		id BIGSERIAL PRIMARY KEY,
+		issue_id BIGINT NOT NULL REFERENCES agent_issues(id) ON DELETE CASCADE,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		action_id VARCHAR(128),
+		action_mode VARCHAR(16) NOT NULL,
+		action_kind VARCHAR(32) NOT NULL,
+		command_type VARCHAR(64),
+		payload TEXT,
+		created_command_id BIGINT REFERENCES agent_commands(id) ON DELETE SET NULL,
+		created_schedule_id BIGINT REFERENCES schedules(id) ON DELETE SET NULL,
+		created_by VARCHAR(255) NOT NULL,
+		status VARCHAR(16) NOT NULL DEFAULT 'created',
+		error TEXT,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_issue_action_audit_issue ON issue_action_audit(issue_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_issue_action_audit_agent ON issue_action_audit(agent_id, created_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addPatchInventoryInstalledAtV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agent_patch_updates ADD COLUMN IF NOT EXISTS installed_at TIMESTAMP;
+
+	UPDATE agent_patch_updates
+	SET installed_at = COALESCE(installed_at, last_seen_at, first_seen_at, CURRENT_TIMESTAMP)
+	WHERE installed = TRUE AND installed_at IS NULL;
+
+	CREATE INDEX IF NOT EXISTS idx_agent_patch_updates_installed_at ON agent_patch_updates(installed_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createIssueThresholdProfilesV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agent_metrics ADD COLUMN IF NOT EXISTS cpu_temperature_c DOUBLE PRECISION;
+	ALTER TABLE agent_metrics ADD COLUMN IF NOT EXISTS disk_temperature_c DOUBLE PRECISION;
+	ALTER TABLE agent_metrics ADD COLUMN IF NOT EXISTS disk_usage_percent DOUBLE PRECISION;
+	ALTER TABLE agent_metrics ADD COLUMN IF NOT EXISTS fan_cpu_rpm DOUBLE PRECISION;
+	ALTER TABLE agent_metrics ADD COLUMN IF NOT EXISTS fan_system_rpm DOUBLE PRECISION;
+
+	CREATE TABLE IF NOT EXISTS issue_threshold_profiles (
+		id BIGSERIAL PRIMARY KEY,
+		name VARCHAR(120) UNIQUE NOT NULL,
+		description TEXT,
+		is_active BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS issue_threshold_rules (
+		id BIGSERIAL PRIMARY KEY,
+		profile_id BIGINT NOT NULL REFERENCES issue_threshold_profiles(id) ON DELETE CASCADE,
+		rule_key VARCHAR(160) NOT NULL,
+		issue_key VARCHAR(160) NOT NULL,
+		category VARCHAR(64) NOT NULL,
+		severity VARCHAR(16) NOT NULL,
+		signal VARCHAR(64) NOT NULL,
+		comparator VARCHAR(8) NOT NULL,
+		threshold_value DOUBLE PRECISION NOT NULL,
+		duration_minutes INT NOT NULL DEFAULT 0,
+		enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		title VARCHAR(255) NOT NULL,
+		description TEXT NOT NULL,
+		source VARCHAR(32) NOT NULL DEFAULT 'metrics',
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(profile_id, rule_key)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_issue_threshold_profiles_active ON issue_threshold_profiles(is_active);
+	CREATE INDEX IF NOT EXISTS idx_issue_threshold_rules_profile ON issue_threshold_rules(profile_id, enabled);
+
+	INSERT INTO issue_threshold_profiles (name, description, is_active)
+	VALUES (
+		'default-threshold-profile',
+		'Default threshold profile for performance and hardware alerts',
+		TRUE
+	)
+	ON CONFLICT (name) DO UPDATE SET
+		description = EXCLUDED.description,
+		is_active = TRUE,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'performance-memory-critical', 'perf-memory-usage-critical', 'performance', 'critical', 'memory_used_percent', 'gt', 95, 9, TRUE,
+		'Memory usage sustained above 95%',
+		'Memory usage exceeded 95% continuously across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'performance-cpu-warning', 'perf-cpu-load-warning', 'performance', 'warning', 'cpu_percent', 'gt', 99, 9, TRUE,
+		'CPU load sustained above 99%',
+		'CPU load exceeded 99% continuously across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'hardware-cpu-temp-critical', 'hw-cpu-temp-critical', 'hardware', 'critical', 'cpu_temperature_c', 'gt', 70, 9, TRUE,
+		'CPU temperature sustained above 70°C',
+		'CPU temperature exceeded 70°C continuously across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'hardware-disk-usage-critical', 'hw-disk-usage-critical', 'hardware', 'critical', 'disk_usage_percent', 'gt', 95, 0, TRUE,
+		'Hard disk usage above 95%',
+		'At least one hard disk volume exceeded 95% usage.',
+		'heartbeat'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'hardware-disk-temp-critical', 'hw-disk-temp-critical', 'hardware', 'critical', 'disk_temperature_c', 'gt', 65, 9, TRUE,
+		'Hard disk temperature sustained above 65°C',
+		'Hard disk temperature exceeded 65°C continuously across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'hardware-disk-temp-warning', 'hw-disk-temp-warning', 'hardware', 'warning', 'disk_temperature_c', 'gt', 60, 9, TRUE,
+		'Hard disk temperature sustained above 60°C',
+		'Hard disk temperature exceeded 60°C continuously across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'hardware-mobo-fans-warning', 'hw-mobo-fans-warning', 'hardware', 'warning', 'fan_cpu_rpm', 'lt', 500, 9, TRUE,
+		'Motherboard CPU fan below 500 RPM',
+		'CPU/system cooling fan RPM remained below 500 across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+
+	WITH active_profile AS (
+		SELECT id FROM issue_threshold_profiles WHERE name = 'default-threshold-profile' LIMIT 1
+	)
+	INSERT INTO issue_threshold_rules (
+		profile_id, rule_key, issue_key, category, severity, signal, comparator, threshold_value,
+		duration_minutes, enabled, title, description, source
+	)
+	SELECT id, 'hardware-system-fans-warning', 'hw-system-fans-warning', 'hardware', 'warning', 'fan_system_rpm', 'lt', 500, 9, TRUE,
+		'Motherboard system fan below 500 RPM',
+		'CPU/system cooling fan RPM remained below 500 across the configured 9-minute period.',
+		'metrics'
+	FROM active_profile
+	ON CONFLICT (profile_id, rule_key) DO UPDATE SET
+		issue_key = EXCLUDED.issue_key,
+		category = EXCLUDED.category,
+		severity = EXCLUDED.severity,
+		signal = EXCLUDED.signal,
+		comparator = EXCLUDED.comparator,
+		threshold_value = EXCLUDED.threshold_value,
+		duration_minutes = EXCLUDED.duration_minutes,
+		enabled = EXCLUDED.enabled,
+		title = EXCLUDED.title,
+		description = EXCLUDED.description,
+		source = EXCLUDED.source,
+		updated_at = CURRENT_TIMESTAMP;
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addIssueMuteControlsV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agent_issues ADD COLUMN IF NOT EXISTS snoozed_until TIMESTAMP;
+	ALTER TABLE agent_issues ADD COLUMN IF NOT EXISTS suppressed BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE agent_issues ADD COLUMN IF NOT EXISTS suppressed_at TIMESTAMP;
+
+	CREATE INDEX IF NOT EXISTS idx_agent_issues_snoozed_until ON agent_issues(snoozed_until);
+	CREATE INDEX IF NOT EXISTS idx_agent_issues_suppressed ON agent_issues(suppressed);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addGlobalChatSessionsV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS global_chat_sessions (
+		id BIGSERIAL PRIMARY KEY,
+		title VARCHAR(255) NOT NULL,
+		created_by VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id BIGINT REFERENCES global_chat_sessions(id) ON DELETE SET NULL;
+
+	CREATE INDEX IF NOT EXISTS idx_chat_messages_scope_session_created ON chat_messages(scope, session_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_global_chat_sessions_updated_at ON global_chat_sessions(updated_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addGlobalChatSessionMemoryV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS global_chat_session_memory (
+		session_id BIGINT PRIMARY KEY REFERENCES global_chat_sessions(id) ON DELETE CASCADE,
+		summary TEXT NOT NULL DEFAULT '',
+		last_compacted_message_id BIGINT NOT NULL DEFAULT 0,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_global_chat_session_memory_updated_at ON global_chat_session_memory(updated_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
 // RecreateAndRunMigrations drops existing migration state and tables then
 // re-applies all migrations from scratch. Use with caution on production.
 func RecreateAndRunMigrations(ctx context.Context, db *pgxpool.Pool) error {
 	// Drop tables that may have been created by previous runs
 	dropQuery := `
+	DROP TABLE IF EXISTS issue_threshold_rules CASCADE;
+	DROP TABLE IF EXISTS issue_threshold_profiles CASCADE;
+	DROP TABLE IF EXISTS issue_action_audit CASCADE;
+	DROP TABLE IF EXISTS agent_issues CASCADE;
+	DROP TABLE IF EXISTS agent_patch_overrides CASCADE;
+	DROP TABLE IF EXISTS agent_patch_updates CASCADE;
+	DROP TABLE IF EXISTS os_patch_policy_audit CASCADE;
+	DROP TABLE IF EXISTS os_patch_policies CASCADE;
+	DROP TABLE IF EXISTS schedules CASCADE;
 	DROP TABLE IF EXISTS chat_messages CASCADE;
+	DROP TABLE IF EXISTS global_chat_session_memory CASCADE;
+	DROP TABLE IF EXISTS global_chat_sessions CASCADE;
 	DROP TABLE IF EXISTS agent_group_members CASCADE;
 	DROP TABLE IF EXISTS agent_groups CASCADE;
 	DROP TABLE IF EXISTS patch_profiles CASCADE;

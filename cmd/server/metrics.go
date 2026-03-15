@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shafraz007/ai-endpoint-platform/internal/config"
 	"github.com/shafraz007/ai-endpoint-platform/internal/server"
 	"github.com/shafraz007/ai-endpoint-platform/internal/transport"
@@ -79,18 +81,54 @@ func metricsIngestHandler(cfg config.ServerConfig) http.HandlerFunc {
 			NetBytesRecvPerSec:   req.NetBytesRecvPerSec,
 			NetPacketsSentPerSec: req.NetPacketsSentPerSec,
 			NetPacketsRecvPerSec: req.NetPacketsRecvPerSec,
+			CPUTemperatureC:      req.CPUTemperatureC,
+			DiskTemperatureC:     req.DiskTemperatureC,
+			DiskUsagePercent:     req.DiskUsagePercent,
+			FanCPURPM:            req.FanCPURPM,
+			FanSystemRPM:         req.FanSystemRPM,
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		if err := server.InsertMetrics(ctx, sample); err != nil {
-			log.Printf("InsertMetrics error: %v", err)
-			http.Error(w, "Failed to store metrics", http.StatusInternalServerError)
-			return
+			if isAgentMetricsFKViolation(err) {
+				if upsertErr := server.EnsureAgentExistsForMetrics(ctx, sample.AgentID); upsertErr != nil {
+					log.Printf("InsertMetrics bootstrap agent upsert error: %v", upsertErr)
+					http.Error(w, "Failed to store metrics", http.StatusInternalServerError)
+					return
+				}
+
+				if retryErr := server.InsertMetrics(ctx, sample); retryErr != nil {
+					log.Printf("InsertMetrics retry error: %v", retryErr)
+					http.Error(w, "Failed to store metrics", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				log.Printf("InsertMetrics error: %v", err)
+				http.Error(w, "Failed to store metrics", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		if err := server.EvaluateMetricIssues(ctx, sample); err != nil {
+			log.Printf("EvaluateMetricIssues warning: %v", err)
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func isAgentMetricsFKViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+
+	if pgErr.Code != "23503" {
+		return false
+	}
+
+	return strings.EqualFold(strings.TrimSpace(pgErr.ConstraintName), "agent_metrics_agent_id_fkey")
 }
 
 func metricsListHandler(cfg config.ServerConfig) http.HandlerFunc {
@@ -277,5 +315,10 @@ func metricSampleToTransport(sample server.MetricSample) transport.MetricsSample
 		NetBytesRecvPerSec:   sample.NetBytesRecvPerSec,
 		NetPacketsSentPerSec: sample.NetPacketsSentPerSec,
 		NetPacketsRecvPerSec: sample.NetPacketsRecvPerSec,
+		CPUTemperatureC:      sample.CPUTemperatureC,
+		DiskTemperatureC:     sample.DiskTemperatureC,
+		DiskUsagePercent:     sample.DiskUsagePercent,
+		FanCPURPM:            sample.FanCPURPM,
+		FanSystemRPM:         sample.FanSystemRPM,
 	}
 }

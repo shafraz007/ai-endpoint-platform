@@ -9,12 +9,13 @@ Your AI Endpoint Platform has been refactored for better maintainability, config
 - ✅ Removed hardcoded values (database URL, port, timeouts)
 - ✅ Centralized configuration through environment variables
 - ✅ Support for configurable:
-  - Server port (default: 8090)
+  - Server port (default: 8070)
   - Database URL
   - HTTP timeouts (Read/Write)
   - Agent heartbeat interval (default: 30s)
   - Request timeout (default: 10s)
   - Retry logic (default: 3 retries)
+  - AI provider/endpoint/model (`openai`, `azure_openai`, `ollama`)
 
 ### 2. Shared Types (`internal/transport/types.go`)
 - ✅ Extracted `HeartbeatRequest` and `Heartbeat` types to avoid duplication
@@ -29,6 +30,8 @@ Your AI Endpoint Platform has been refactored for better maintainability, config
 - ✅ Better HTTP server configuration (timeouts, max headers)
 - ✅ JSON response consistency
 - ✅ Structured logging
+- ✅ Admin session-based auth for UI + APIs
+- ✅ Chat, governance, scheduler, and report routes integrated with persistence
 
 ### 4. Agent Refactoring (`cmd/agent/main.go`)
 - ✅ Configuration-driven (no hardcoded values)
@@ -37,6 +40,8 @@ Your AI Endpoint Platform has been refactored for better maintainability, config
 - ✅ Graceful shutdown with signal handling
 - ✅ Improved error logging
 - ✅ Context-based lifecycle management
+- ✅ AI task handling with personal chat context memory
+- ✅ Deterministic command intent handling for chat (`cmd:`, `powershell:`, `shell:`, explicit ping, update install intent)
 
 ### 5. Database Layer (`internal/server/`)
 - **db.go**:
@@ -57,11 +62,23 @@ Your AI Endpoint Platform has been refactored for better maintainability, config
   - ✅ Structured logging
   - ✅ Clear error messages
 
+### 7. Queue Reliability (`cmd/chat-worker`, `internal/queue`)
+- ✅ Consumer-group queue subscription support for horizontally scaled workers
+- ✅ Idempotent `ai_task` command creation path for duplicate-safe queue delivery
+- ✅ Retry/backoff handling on worker processing failures
+- ✅ Dead-letter publish flow for terminal queue failures
+- ✅ Dedicated worker logging output for production troubleshooting
+
+### 8. Runtime Safety
+- ✅ Windows agent process singleton guard to avoid accidental multi-instance behavior
+- ✅ Improved Ollama local endpoint handling and native non-stream request parsing
+- ✅ Timeout-isolated personal chat fallback now returns structured diagnostics snapshot
+
 ## Environment Variables
 
 ### Server
 ```bash
-SERVER_PORT=8090                          # HTTP server port
+SERVER_PORT=8070                          # HTTP server port
 DATABASE_URL=postgres://...               # PostgreSQL connection string
 READ_TIMEOUT_SECONDS=15                   # HTTP read timeout
 WRITE_TIMEOUT_SECONDS=15                  # HTTP write timeout
@@ -70,7 +87,7 @@ MAX_HEADER_BYTES=1048576                  # Max header size (1MB)
 
 ### Agent
 ```bash
-SERVER_URL=http://localhost:8090          # Server endpoint
+SERVER_URL=http://localhost:8070          # Server endpoint
 HEARTBEAT_INTERVAL_SECONDS=30             # Heartbeat frequency
 REQUEST_TIMEOUT_SECONDS=10                # HTTP request timeout
 MAX_RETRIES=3                             # Retry attempts
@@ -95,7 +112,7 @@ go run ./cmd/agent
 SERVER_PORT=9090 DATABASE_URL=... go run ./cmd/server
 
 # Agent
-SERVER_URL=http://example.com:9090 go run ./cmd/agent
+SERVER_URL=http://example.com:8070 go run ./cmd/agent
 ```
 
 ## Improvements Summary
@@ -109,6 +126,7 @@ SERVER_URL=http://example.com:9090 go run ./cmd/agent
 | Logging | Emoji only | Structured logging |
 | Timeouts | None | Configurable timeouts |
 | Database ops | Infinite wait | 5s timeout |
+| Queue reliability | Basic publish/consume | Consumer groups + retry + DLQ + idempotency |
 
 ## Breaking Changes
 None - all changes are backward compatible. Existing behavior is preserved with sensible defaults.

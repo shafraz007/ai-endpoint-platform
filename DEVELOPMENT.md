@@ -45,15 +45,24 @@ Create a `.env.development` file (example):
 DATABASE_URL=postgres://aidev:devpassword@localhost:5432/ai_agents?sslmode=disable
 
 # Server
-SERVER_PORT=8080
+SERVER_PORT=8070
 OFFLINE_TIMEOUT_SECONDS=90
 OFFLINE_CHECK_INTERVAL_SECONDS=30
 AGENT_JWT_SECRET=dev_agent_secret
 ADMIN_JWT_SECRET=dev_admin_secret
 ADMIN_JWT_TTL_SECONDS=3600
+QUEUE_ENABLED=true
+QUEUE_PROVIDER=nats
+NATS_URL=nats://localhost:4222
+QUEUE_SUBJECT_PREFIX=chat
+QUEUE_AGENT_CHAT_ACTIVE=true
+QUEUE_AGENT_CHAT_SUBJECT=agent.chat.shadow
+QUEUE_AGENT_CHAT_CONSUMER_GROUP=agent-chat-workers
+QUEUE_AGENT_CHAT_MAX_ATTEMPTS=4
+QUEUE_AGENT_CHAT_DLQ_SUBJECT=agent.chat.shadow.dlq
 
 # Agent
-SERVER_URL=http://localhost:8080
+SERVER_URL=http://localhost:8070
 HEARTBEAT_INTERVAL_SECONDS=30
 REQUEST_TIMEOUT_SECONDS=10
 AGENT_JWT_SECRET=dev_agent_secret
@@ -61,6 +70,10 @@ AGENT_JWT_TTL_SECONDS=300
 COMMAND_POLL_INTERVAL_SECONDS=30
 COMMAND_TIMEOUT_SECONDS=60
 METRICS_INTERVAL_SECONDS=5
+AGENT_AI_PROVIDER=ollama
+AGENT_AI_ENDPOINT=http://127.0.0.1:11434/api/chat
+AGENT_AI_MODEL=llama3.2
+AGENT_AI_API_KEY=
 ```
 
 Source it before running:
@@ -74,7 +87,7 @@ Migrations run automatically on server startup, but you can verify manually:
 
 ```bash
 go run ./cmd/server
-# Check logs for: "✓ Migration 001_create_agents_table_v1_0_0 completed"
+# Check logs for: "Starting server on port 8070"
 ```
 
 ## Building the Project
@@ -105,7 +118,7 @@ go build -o bin/agent ./cmd/agent && go build -o bin/server ./cmd/server
 
 ```bash
 export DATABASE_URL=postgres://aidev:devpassword@localhost:5432/ai_agents?sslmode=disable
-export SERVER_PORT=8080
+export SERVER_PORT=8070
 export AGENT_JWT_SECRET=dev_agent_secret
 export ADMIN_JWT_SECRET=dev_admin_secret
 go run ./cmd/server
@@ -113,15 +126,15 @@ go run ./cmd/server
 
 Expected output:
 ```
-2026-02-17T10:30:00Z Running migration 001_create_agents_table_v1_0_0...
-2026-02-17T10:30:00Z ✓ Migration 001_create_agents_table_v1_0_0 completed
-2026-02-17T10:30:00Z Server listening on :8080
+2026-02-27T10:30:00Z PostgreSQL connected successfully
+2026-02-27T10:30:00Z ✓ Migration 012_create_os_patch_policy_audit_table_v1_8_1 already applied
+2026-02-27T10:30:00Z Starting server on port 8070
 ```
 
 ### Terminal 2: Start Agent
 
 ```bash
-export SERVER_URL=http://localhost:8080
+export SERVER_URL=http://localhost:8070
 export AGENT_JWT_SECRET=dev_agent_secret
 go run ./cmd/agent
 ```
@@ -130,14 +143,35 @@ Expected output:
 ```
 2026-02-17T10:30:05Z Loaded existing agent ID from ~/.config/ai-endpoint-agent/agent_id
 2026-02-17T10:30:05Z Agent started - ID: <uuid>, Hostname: <hostname>, Version: 1.0.0
-2026-02-17T10:30:05Z Server URL: http://localhost:8080, Heartbeat interval: 30s
+2026-02-17T10:30:05Z Server URL: http://localhost:8070, Heartbeat interval: 30s
 2026-02-17T10:30:35Z Heartbeat sent successfully
+```
+
+### Terminal 3: Start Chat Worker
+
+```bash
+export QUEUE_ENABLED=true
+export QUEUE_PROVIDER=nats
+export NATS_URL=nats://localhost:4222
+export QUEUE_SUBJECT_PREFIX=chat
+export QUEUE_AGENT_CHAT_ACTIVE=true
+export QUEUE_AGENT_CHAT_SUBJECT=agent.chat.shadow
+export QUEUE_AGENT_CHAT_CONSUMER_GROUP=agent-chat-workers
+export QUEUE_AGENT_CHAT_MAX_ATTEMPTS=4
+export QUEUE_AGENT_CHAT_DLQ_SUBJECT=agent.chat.shadow.dlq
+go run ./cmd/chat-worker
+```
+
+Expected output:
+```
+PostgreSQL connected successfully
+chat worker starting (provider=nats subject=chat.agent.chat.shadow group=agent-chat-workers dlq=agent.chat.shadow.dlq max_attempts=4)
 ```
 
 ### Terminal 3: View Web UI
 
 ```bash
-open http://localhost:8080/
+open http://localhost:8070/
 ```
 
 Default admin login
@@ -160,7 +194,9 @@ cmd/
         ├── agent-detail.html
         ├── login.html
         ├── change-password.html
-        └── session-timeout.html
+        ├── session-timeout.html
+        ├── settings.html
+        └── reports.html
 ```
 
 ### internal/ - Core Logic
@@ -168,26 +204,25 @@ cmd/
 ```
 internal/
 ├── agent/
-│   └── systeminfo.go    # System/hardware information collection
+│   ├── systeminfo.go    # System/hardware information collection
+│   ├── osinfo.go        # OS/security details
+│   └── metrics.go       # Local metrics sampling
 ├── config/
 │   └── config.go        # Configuration loading from environment
 ├── migrations/
 │   └── migrations.go    # Database schema management
 ├── server/
-│   ├── agents.go        # Agent data model
-│   ├── agent_repo.go    # Database access (repository pattern)
-│   └── handlers.go      # HTTP request handlers
+│   ├── agents.go        # Agent APIs and query helpers
+│   ├── commands.go      # Command queue persistence
+│   ├── chat.go          # Chat persistence
+│   ├── governance.go    # Governance persistence
+│   ├── schedules.go     # Schedule persistence + dispatch helpers
+│   ├── reports.go       # Execution report persistence
+│   └── users.go         # Admin user persistence
 ├── transport/
 │   └── types.go         # Request/response types
-└── device/
-    └── device.go        # Device detection/info
-```
-
-### pkg/ - Public Packages
-
-```
-pkg/
-└── (future use)
+└── auth/
+    └── jwt.go           # JWT helpers
 ```
 
 ## Testing
@@ -237,6 +272,13 @@ For tests requiring database:
 export DB_HOST=localhost
 export DB_NAME=test_ai_agents
 go test -run Integration ./... -v
+```
+
+Queue smoke helpers:
+
+```powershell
+.\tmp_report_smoke.ps1
+.\scripts\show-chat-dlq.ps1 -Tail 80
 ```
 
 ## Code Style & Standards
@@ -333,26 +375,25 @@ func getHardwareVendor() string {
        _, err := db.Exec(ctx, query)
        return err
    }
-   
+        ├── systeminfo.go    # System/hardware information collection
+        ├── osinfo.go        # OS/security details
+        └── metrics.go       # Local metrics sampling
    // Add to migrations slice:
    {
        Name: "002_add_new_column",
        Up:   addNewColumn,
    }
-   ```
-
-3. **Test Migration**:
+        ├── agents.go        # Agent APIs and query helpers
+        ├── commands.go      # Command queue persistence
+        ├── chat.go          # Chat persistence
+        ├── governance.go    # Governance persistence
+        ├── schedules.go     # Schedule persistence + dispatch helpers
+        ├── reports.go       # Execution report persistence
+        └── users.go         # Admin user persistence
    ```bash
    go run ./cmd/server
-   ```
-
-### Database Querying
-
-Use parameterized queries to prevent SQL injection:
-
-```go
-// Good
-err := db.QueryRow(ctx, 
+    └── auth/
+        └── jwt.go           # JWT helpers
     "SELECT * FROM agents WHERE agent_id = $1", 
     agentID).Scan(&agent.ID, ...)
 
@@ -474,7 +515,7 @@ go build -o agent ./cmd/agent && go build -o server ./cmd/server
 # In another terminal, run agent
 ./agent
 
-# Check web UI at http://localhost:8080/agents
+# Check web UI at http://localhost:8070/agents
 ```
 
 ## Debugging
@@ -509,17 +550,17 @@ SELECT COUNT(*) FROM agents WHERE status = 'online';
 Check heartbeat traffic:
 ```bash
 # macOS/Linux
-tcpdump -i lo port 8080
+tcpdump -i lo port 8070
 
 # Windows (PowerShell as admin)
-netstat -an | findstr :8080
+netstat -an | findstr :8070
 ```
 
 ### Testing with cURL
 
 ```bash
 # Send test heartbeat
-curl -X POST http://localhost:8080/api/agents/heartbeat \
+curl -X POST http://localhost:8070/api/heartbeat \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "test-agent-123",
@@ -528,11 +569,36 @@ curl -X POST http://localhost:8080/api/agents/heartbeat \
   }'
 
 # Get agents list
-curl http://localhost:8080/api/agents
+curl http://localhost:8070/api/agents
 
 # Get specific agent
-curl http://localhost:8080/api/agents/test-agent-123
+curl http://localhost:8070/api/agents/test-agent-123
 ```
+
+### Issue System Validation (Alerts)
+
+Use these checks when working on issue detection, issue lifecycle, and remediation workflows:
+
+```bash
+# List active issues
+curl -H "Authorization: Bearer <admin_token>" \
+    "http://localhost:8070/api/issues?status=active&limit=100"
+
+# List issues for one agent
+curl -H "Authorization: Bearer <admin_token>" \
+    "http://localhost:8070/api/issues?agent_id=test-agent-123&status=active&limit=100"
+
+# Execute a recommended action immediately
+curl -X POST http://localhost:8070/api/issues/42/actions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer <admin_token>" \
+    -d '{"action_id":"cpu-process-snapshot","mode":"run_now"}'
+```
+
+Notes:
+- Issues are deduplicated by `(agent_id, issue_key)` in `agent_issues`.
+- Recovery conditions auto-resolve issues by setting status to `resolved`.
+- Scheduler dispatch skips duplicate in-flight `restart`/`shutdown` commands per agent while same command type remains `queued` or `dispatched`.
 
 ## Performance Profiling
 
@@ -608,7 +674,7 @@ Or manually:
 psql -U postgres -d ai_agents -c "DROP TABLE IF EXISTS agents, schema_migrations CASCADE;"
 ```
 
-### Issue: "Port 8080 already in use"
+### Issue: "Port 8070 already in use"
 
 Change port:
 ```bash
@@ -618,8 +684,8 @@ go run ./cmd/server
 
 Or kill process:
 ```bash
-lsof -ti:8080 | xargs kill -9    # macOS/Linux
-netstat -ano | findstr :8080     # Windows (find PID then taskkill)
+lsof -ti:8070 | xargs kill -9    # macOS/Linux
+netstat -ano | findstr :8070     # Windows (find PID then taskkill)
 ```
 
 ## Resources
