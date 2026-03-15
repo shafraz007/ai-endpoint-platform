@@ -572,6 +572,11 @@ New migrations added as needed with automatic execution on startup.
 
 ## Version History
 
+## Release Notes
+
+- See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the consolidated latest release summary.
+- See [RELEASE_PR_NOTE.md](RELEASE_PR_NOTE.md) for detailed PR/release rollout notes.
+
 ### v1.x (2026)
 - Initial agent/server release with heartbeat and inventory
 - Admin auth, commands, metrics, governance, chat, schedules, and reports
