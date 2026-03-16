@@ -1,0 +1,19 @@
+PackageIdentifier: Contoso.AIEndpointAgent
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: Contoso
+PublisherUrl: https://example.com
+PublisherSupportUrl: https://example.com/support
+Author: Contoso Platform Team
+PackageName: AI Endpoint Agent
+PackageUrl: https://example.com/aiendpoint
+License: Proprietary
+Copyright: Copyright (c) Contoso
+ShortDescription: Installs AI Endpoint agent and registers Windows service.
+Description: Installs a prebuilt agent binary, applies environment configuration, and starts AIEndpointAgent service.
+Tags:
+  - ai
+  - endpoint
+  - agent
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

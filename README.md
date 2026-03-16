@@ -178,6 +178,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-serv
 	-UseLocalSystem
 ```
 
+If you already have a built `agent.exe`, install without build mode:
+
+```powershell
+Copy-Item "D:\releases\agent.exe" "C:\Program Files\AIEndpoint\agent.exe" -Force
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
+	-ServiceName AIEndpointAgent `
+	-InstallDir "C:\Program Files\AIEndpoint" `
+	-ServerURL "http://<server>:8070" `
+	-AgentJWTSecret "<agent_jwt_secret>" `
+	-UseLocalSystem
+```
+
+In this mode, do not pass `-BuildFromSource`.
+
+For WinGet-based enterprise rollout (private source templates + bootstrap script), see:
+- `deployments/winget/README.md`
+
 The script always sets required startup env vars:
 - `SERVER_URL`
 - `AGENT_JWT_SECRET`

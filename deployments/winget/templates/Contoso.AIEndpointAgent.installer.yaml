@@ -1,0 +1,12 @@
+PackageIdentifier: Contoso.AIEndpointAgent
+PackageVersion: 1.0.0
+InstallerType: exe
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://downloads.example.com/aiendpoint/1.0.0/AIEndpointAgentBootstrap.exe
+    InstallerSha256: REPLACE_WITH_SHA256
+    InstallerSwitches:
+      Silent: /S
+      SilentWithProgress: /S
+ManifestType: installer
+ManifestVersion: 1.6.0

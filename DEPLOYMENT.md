@@ -408,6 +408,8 @@ Start-ScheduledTask -TaskName "AIEndpointServer"
 
 Run from an elevated PowerShell window on each endpoint (or via RMM/automation):
 
+Build from source mode:
+
 ```powershell
 Set-Location C:\Program Files\AIEndpointPlatform\source
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
@@ -420,6 +422,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-serv
   -LogDir "C:\ProgramData\AIEndpoint\logs" `
   -UseLocalSystem
 ```
+
+Use prebuilt `agent.exe` mode (no build step):
+
+```powershell
+Copy-Item "D:\releases\agent.exe" "C:\Program Files\AIEndpoint\agent.exe" -Force
+Set-Location C:\Program Files\AIEndpointPlatform\source
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
+  -ServiceName AIEndpointAgent `
+  -InstallDir "C:\Program Files\AIEndpoint" `
+  -ServerURL "http://<server>:8070" `
+  -AgentJWTSecret "<shared_agent_secret>" `
+  -LogDir "C:\ProgramData\AIEndpoint\logs" `
+  -UseLocalSystem
+```
+
+Notes for prebuilt mode:
+- Do not pass `-BuildFromSource`.
+- Installer expects binary at `<InstallDir>\agent.exe`.
+- If `agent.exe` is already in `InstallDir`, skip the `Copy-Item` line.
+- For WinGet rollout templates and bootstrap script, see `deployments/winget/README.md`.
 
 Notes:
 - Default `-UseLocalSystem` runs agent with elevated local privileges.
