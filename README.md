@@ -160,6 +160,37 @@ Provider notes:
 	- `AGENT_AI_API_KEY=`
 5. Restart agent process.
 
+### Windows Agent Service Installer (Elevated)
+
+Use the one-shot installer to run agent as a Windows service (LocalSystem by default) and set machine-level env vars:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
+	-BuildFromSource `
+	-SourceDir . `
+	-ServiceName AIEndpointAgent `
+	-ServerURL "http://<server>:8070" `
+	-AgentJWTSecret "<agent_jwt_secret>" `
+	-AgentAIProvider "ollama" `
+	-AgentAIEndpoint "http://127.0.0.1:11434/api/chat" `
+	-AgentAIModel "llama3.2" `
+	-AgentAIChatEngine "v2" `
+	-UseLocalSystem
+```
+
+The script always sets required startup env vars:
+- `SERVER_URL`
+- `AGENT_JWT_SECRET`
+- `LOG_DIR`
+- `LOG_TO_CONSOLE`
+
+Optional runtime/AI env vars are also supported via parameters:
+- `HEARTBEAT_INTERVAL_SECONDS`, `REQUEST_TIMEOUT_SECONDS`, `AGENT_AI_TIMEOUT_SECONDS`
+- `MAX_RETRIES`, `RETRY_BACKOFF_SECONDS`, `AGENT_JWT_TTL_SECONDS`
+- `COMMAND_POLL_INTERVAL_SECONDS`, `COMMAND_TIMEOUT_SECONDS`, `METRICS_INTERVAL_SECONDS`
+- `AGENT_AI_PROVIDER`, `AGENT_AI_ENDPOINT`, `AGENT_AI_MODEL`, `AGENT_AI_API_KEY`
+- `AGENT_AI_SYSTEM_PROMPT`, `AGENT_AI_API_VERSION`, `AGENT_AI_DEPLOYMENT`, `AGENT_AI_CHAT_ENGINE`
+
 ### Server Environment Variables
 ```bash
 DATABASE_URL=postgres://ai_endpoint_user:your_password@localhost:5432/ai_agents?sslmode=disable

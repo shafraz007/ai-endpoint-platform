@@ -404,6 +404,29 @@ Register-ScheduledTask `
 Start-ScheduledTask -TaskName "AIEndpointServer"
 ```
 
+#### 5. Install Agent as Windows Service (Administrator Privilege)
+
+Run from an elevated PowerShell window on each endpoint (or via RMM/automation):
+
+```powershell
+Set-Location C:\Program Files\AIEndpointPlatform\source
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
+  -BuildFromSource `
+  -SourceDir . `
+  -ServiceName AIEndpointAgent `
+  -InstallDir "C:\Program Files\AIEndpoint" `
+  -ServerURL "http://<server>:8070" `
+  -AgentJWTSecret "<shared_agent_secret>" `
+  -LogDir "C:\ProgramData\AIEndpoint\logs" `
+  -UseLocalSystem
+```
+
+Notes:
+- Default `-UseLocalSystem` runs agent with elevated local privileges.
+- Script sets required machine env vars (`SERVER_URL`, `AGENT_JWT_SECRET`, `LOG_DIR`, `LOG_TO_CONSOLE`).
+- Script can optionally set all supported agent runtime and AI env vars (timeouts/retries/provider/model/endpoint).
+- For a custom service account, use `-UseLocalSystem:$false -ServiceUser <user> -ServicePassword <password>`.
+
 ### Option 3: Docker Deployment
 
 Create `Dockerfile`:
