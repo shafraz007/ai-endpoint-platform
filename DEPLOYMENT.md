@@ -427,6 +427,33 @@ Notes:
 - Script can optionally set all supported agent runtime and AI env vars (timeouts/retries/provider/model/endpoint).
 - For a custom service account, use `-UseLocalSystem:$false -ServiceUser <user> -ServicePassword <password>`.
 
+Troubleshooting:
+- `Error 1067` after start: check machine env values and restart service:
+
+```powershell
+[Environment]::GetEnvironmentVariable("SERVER_URL","Machine")
+[Environment]::GetEnvironmentVariable("AGENT_JWT_SECRET","Machine")
+Restart-Service AIEndpointAgent
+```
+
+- Service starts but endpoint is not visible in server UI:
+
+```powershell
+Test-NetConnection <server> -Port 8070
+Get-ChildItem "C:\ProgramData\AIEndpoint\logs" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+```
+
+- Credential-based service fails (`1057`/`1069`):
+  - validate account password,
+  - ensure account has `Log on as a service`,
+  - or switch to LocalSystem during incident recovery.
+
+- Re-run installer to repair configuration:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName AIEndpointAgent -ServerURL "http://<server>:8070" -AgentJWTSecret "<shared_agent_secret>" -UseLocalSystem
+```
+
 ### Option 3: Docker Deployment
 
 Create `Dockerfile`:

@@ -191,6 +191,16 @@ Optional runtime/AI env vars are also supported via parameters:
 - `AGENT_AI_PROVIDER`, `AGENT_AI_ENDPOINT`, `AGENT_AI_MODEL`, `AGENT_AI_API_KEY`
 - `AGENT_AI_SYSTEM_PROMPT`, `AGENT_AI_API_VERSION`, `AGENT_AI_DEPLOYMENT`, `AGENT_AI_CHAT_ENGINE`
 
+Troubleshooting (Windows service):
+- Service fails to start with `Error 1067`: verify `AGENT_JWT_SECRET` and `SERVER_URL` are present at machine scope.
+- Service appears running but no heartbeat: verify outbound connectivity to server (`Test-NetConnection <server> -Port 8070`).
+- No logs visible: ensure `LOG_DIR` exists and service account has write access.
+- Service account issue (`Error 1057`/`1069`): reconfigure service credentials or switch to `-UseLocalSystem`.
+- Validate service quickly:
+	- `Get-Service AIEndpointAgent`
+	- `Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'agent.exe' }`
+	- `Get-ChildItem "C:\ProgramData\AIEndpoint\logs"`
+
 ### Server Environment Variables
 ```bash
 DATABASE_URL=postgres://ai_endpoint_user:your_password@localhost:5432/ai_agents?sslmode=disable
