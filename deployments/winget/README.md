@@ -33,10 +33,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deployments\winget\bootstr
 
 ## Private WinGet manifest notes
 
-The templates in `templates/` are intentionally placeholders:
-- Replace `PackageIdentifier`, `Publisher`, URLs, hashes, version.
-- `installer` template assumes a bootstrap installer binary URL (`AIEndpointAgentBootstrap.exe`).
-- If you keep deployment as PowerShell-only, use the bootstrap script directly without publishing a package.
+Templates are pre-filled for this repository with:
+- `PackageIdentifier: Shafraz007.AIEndpointAgent`
+- Publisher metadata and GitHub support URLs
+- GitHub release URL convention for installer binaries
+
+Before publishing, update:
+- `PackageVersion`
+- `InstallerUrl` (if your artifact name or hosting path differs)
+- `InstallerSha256`
+
+`installer` template assumes a bootstrap installer artifact named `AIEndpointAgentBootstrap.exe`.
+If you keep deployment as PowerShell-only, use the bootstrap script directly without publishing a WinGet package.
 
 ## Security notes
 

@@ -1,9 +1,9 @@
-PackageIdentifier: Contoso.AIEndpointAgent
+PackageIdentifier: Shafraz007.AIEndpointAgent
 PackageVersion: 1.0.0
 InstallerType: exe
 Installers:
   - Architecture: x64
-    InstallerUrl: https://downloads.example.com/aiendpoint/1.0.0/AIEndpointAgentBootstrap.exe
+    InstallerUrl: https://github.com/shafraz007/ai-endpoint-platform/releases/download/v1.0.0/AIEndpointAgentBootstrap.exe
     InstallerSha256: REPLACE_WITH_SHA256
     InstallerSwitches:
       Silent: /S
