@@ -1,6 +1,6 @@
-# AI Endpoint Platform
+# Armada Platform
 
-A distributed agent-server architecture for comprehensive endpoint monitoring and management. The system consists of autonomous agents deployed on target machines that collect system information and report to a central server.
+Armada is a distributed agent-server architecture for comprehensive endpoint monitoring and management. The system consists of autonomous agents deployed on target machines that collect system information and report to a central server.
 
 ## Architecture Overview
 
@@ -168,7 +168,7 @@ Use the one-shot installer to run agent as a Windows service (LocalSystem by def
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
 	-BuildFromSource `
 	-SourceDir . `
-	-ServiceName AIEndpointAgent `
+	-ServiceName ArmadaAgent `
 	-ServerURL "http://<server>:8070" `
 	-AgentJWTSecret "<agent_jwt_secret>" `
 	-AgentAIProvider "ollama" `
@@ -181,10 +181,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-serv
 If you already have a built `agent.exe`, install without build mode:
 
 ```powershell
-Copy-Item "D:\releases\agent.exe" "C:\Program Files\AIEndpoint\agent.exe" -Force
+Copy-Item "D:\releases\agent.exe" "C:\Program Files\Armada\agent.exe" -Force
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
-	-ServiceName AIEndpointAgent `
-	-InstallDir "C:\Program Files\AIEndpoint" `
+	-ServiceName ArmadaAgent `
+	-InstallDir "C:\Program Files\Armada" `
 	-ServerURL "http://<server>:8070" `
 	-AgentJWTSecret "<agent_jwt_secret>" `
 	-UseLocalSystem
@@ -214,9 +214,9 @@ Troubleshooting (Windows service):
 - No logs visible: ensure `LOG_DIR` exists and service account has write access.
 - Service account issue (`Error 1057`/`1069`): reconfigure service credentials or switch to `-UseLocalSystem`.
 - Validate service quickly:
-	- `Get-Service AIEndpointAgent`
+	- `Get-Service ArmadaAgent`
 	- `Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'agent.exe' }`
-	- `Get-ChildItem "C:\ProgramData\AIEndpoint\logs"`
+	- `Get-ChildItem "C:\ProgramData\Armada\logs"`
 
 ### Server Environment Variables
 ```bash

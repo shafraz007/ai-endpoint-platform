@@ -1,9 +1,9 @@
-PackageIdentifier: Shafraz007.AIEndpointAgent
+PackageIdentifier: Shafraz007.ArmadaAgent
 PackageVersion: 1.0.0
 InstallerType: exe
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/shafraz007/ai-endpoint-platform/releases/download/v1.0.0/AIEndpointAgentBootstrap.exe
+    InstallerUrl: https://github.com/shafraz007/ai-endpoint-platform/releases/download/v1.0.0/ArmadaAgentBootstrap.exe
     InstallerSha256: REPLACE_WITH_SHA256
     InstallerSwitches:
       Silent: /S

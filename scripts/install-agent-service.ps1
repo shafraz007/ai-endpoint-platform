@@ -1,9 +1,9 @@
 param(
-    [string]$ServiceName = "AIEndpointAgent",
-    [string]$InstallDir = "C:\Program Files\AIEndpoint",
+    [string]$ServiceName = "ArmadaAgent",
+    [string]$InstallDir = "C:\Program Files\Armada",
     [string]$ServerURL = "http://localhost:8070",
     [string]$AgentJWTSecret = "",
-    [string]$LogDir = "C:\ProgramData\AIEndpoint\logs",
+    [string]$LogDir = "C:\ProgramData\Armada\logs",
     [string]$LogToConsole = "false",
     [string]$HeartbeatIntervalSeconds = "",
     [string]$RequestTimeoutSeconds = "",

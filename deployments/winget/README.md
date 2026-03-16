@@ -24,8 +24,8 @@ Run as Administrator on endpoint:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\deployments\winget\bootstrap\install-agent-with-winget.ps1 `
-  -AgentBinaryUrl "https://downloads.example.com/aiendpoint/1.0.0/agent.exe" `
-  -InstallerScriptUrl "https://downloads.example.com/aiendpoint/1.0.0/install-agent-service.ps1" `
+  -AgentBinaryUrl "https://downloads.example.com/armada/1.0.0/agent.exe" `
+  -InstallerScriptUrl "https://downloads.example.com/armada/1.0.0/install-agent-service.ps1" `
   -ServerURL "http://your-server:8070" `
   -AgentJWTSecret "<shared_agent_secret>" `
   -UseLocalSystem
@@ -34,7 +34,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deployments\winget\bootstr
 ## Private WinGet manifest notes
 
 Templates are pre-filled for this repository with:
-- `PackageIdentifier: Shafraz007.AIEndpointAgent`
+- `PackageIdentifier: Shafraz007.ArmadaAgent`
 - Publisher metadata and GitHub support URLs
 - GitHub release URL convention for installer binaries
 
@@ -43,7 +43,7 @@ Before publishing, update:
 - `InstallerUrl` (if your artifact name or hosting path differs)
 - `InstallerSha256`
 
-`installer` template assumes a bootstrap installer artifact named `AIEndpointAgentBootstrap.exe`.
+`installer` template assumes a bootstrap installer artifact named `ArmadaAgentBootstrap.exe`.
 If you keep deployment as PowerShell-only, use the bootstrap script directly without publishing a WinGet package.
 
 ## Security notes
@@ -110,15 +110,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deployments\winget\bootstr
 - downloads `install-agent-service.ps1`
 - runs the service installer
 - sets machine-level environment variables
-- creates or updates `AIEndpointAgent`
+- creates or updates `ArmadaAgent`
 - starts the service
 
 ### 8. Verify endpoint
 
 ```powershell
-Get-Service AIEndpointAgent
+Get-Service ArmadaAgent
 Test-NetConnection your-server -Port 8070
-Get-ChildItem "C:\ProgramData\AIEndpoint\logs"
+Get-ChildItem "C:\ProgramData\Armada\logs"
 ```
 
 ### 9. Verify server side
@@ -134,7 +134,7 @@ Get-ChildItem "C:\ProgramData\AIEndpoint\logs"
 - run:
 
 ```powershell
-winget upgrade Shafraz007.AIEndpointAgent
+winget upgrade Shafraz007.ArmadaAgent
 ```
 
 ### 11. Rollback flow
@@ -144,7 +144,7 @@ winget upgrade Shafraz007.AIEndpointAgent
 - restart service:
 
 ```powershell
-Restart-Service AIEndpointAgent
+Restart-Service ArmadaAgent
 ```
 
 ### 12. Troubleshooting quick checks
@@ -152,6 +152,6 @@ Restart-Service AIEndpointAgent
 ```powershell
 [Environment]::GetEnvironmentVariable("SERVER_URL","Machine")
 [Environment]::GetEnvironmentVariable("AGENT_JWT_SECRET","Machine")
-Get-Service AIEndpointAgent
-Get-ChildItem "C:\ProgramData\AIEndpoint\logs" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+Get-Service ArmadaAgent
+Get-ChildItem "C:\ProgramData\Armada\logs" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5
 ```

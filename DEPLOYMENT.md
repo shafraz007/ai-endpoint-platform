@@ -342,7 +342,7 @@ sudo systemctl reload nginx
 #### 1. Create Application Directory
 
 ```powershell
-$appPath = "C:\Program Files\AIEndpointPlatform"
+$appPath = "C:\Program Files\ArmadaPlatform"
 New-Item -ItemType Directory -Force -Path $appPath
 ```
 
@@ -368,21 +368,21 @@ Copy-Item -Path "bin\agent.exe" -Destination $appPath
 
 ```powershell
 # Using NSSM (Non-Sucking Service Manager)
-nssm install AIEndpointServer `
-  "C:\Program Files\AIEndpointPlatform\server.exe"
+nssm install ArmadaServer `
+  "C:\Program Files\ArmadaPlatform\server.exe"
 
-nssm set AIEndpointServer AppEnvironmentExtra `
+nssm set ArmadaServer AppEnvironmentExtra `
   "DATABASE_URL=postgres://ai_endpoint_user:<your_secure_password>@prod-db.internal:5432/ai_agents?sslmode=require;SERVER_PORT=8070;OFFLINE_TIMEOUT_SECONDS=90;OFFLINE_CHECK_INTERVAL_SECONDS=30;AGENT_JWT_SECRET=<shared_agent_secret>;ADMIN_JWT_SECRET=<admin_secret>"
 
 # Configure Log
-nssm set AIEndpointServer AppStdout `
-  "C:\Program Files\AIEndpointPlatform\logs\server.log"
+nssm set ArmadaServer AppStdout `
+  "C:\Program Files\ArmadaPlatform\logs\server.log"
 
-nssm set AIEndpointServer AppStderr `
-  "C:\Program Files\AIEndpointPlatform\logs\server.log"
+nssm set ArmadaServer AppStderr `
+  "C:\Program Files\ArmadaPlatform\logs\server.log"
 
 # Start Service
-nssm start AIEndpointServer
+nssm start ArmadaServer
 ```
 
 Or using PowerShell directly:
@@ -390,18 +390,18 @@ Or using PowerShell directly:
 ```powershell
 # Create scheduled task
 $action = New-ScheduledTaskAction `
-  -Execute "C:\Program Files\AIEndpointPlatform\server.exe"
+  -Execute "C:\Program Files\ArmadaPlatform\server.exe"
 
 $trigger = New-ScheduledTaskTrigger -AtStartup
 
 Register-ScheduledTask `
-  -TaskName "AIEndpointServer" `
+  -TaskName "ArmadaServer" `
   -Action $action `
   -Trigger $trigger `
   -RunLevel Highest
 
 # Start task
-Start-ScheduledTask -TaskName "AIEndpointServer"
+Start-ScheduledTask -TaskName "ArmadaServer"
 ```
 
 #### 5. Install Agent as Windows Service (Administrator Privilege)
@@ -411,29 +411,29 @@ Run from an elevated PowerShell window on each endpoint (or via RMM/automation):
 Build from source mode:
 
 ```powershell
-Set-Location C:\Program Files\AIEndpointPlatform\source
+Set-Location C:\Program Files\ArmadaPlatform\source
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
   -BuildFromSource `
   -SourceDir . `
-  -ServiceName AIEndpointAgent `
-  -InstallDir "C:\Program Files\AIEndpoint" `
+  -ServiceName ArmadaAgent `
+  -InstallDir "C:\Program Files\Armada" `
   -ServerURL "http://<server>:8070" `
   -AgentJWTSecret "<shared_agent_secret>" `
-  -LogDir "C:\ProgramData\AIEndpoint\logs" `
+  -LogDir "C:\ProgramData\Armada\logs" `
   -UseLocalSystem
 ```
 
 Use prebuilt `agent.exe` mode (no build step):
 
 ```powershell
-Copy-Item "D:\releases\agent.exe" "C:\Program Files\AIEndpoint\agent.exe" -Force
-Set-Location C:\Program Files\AIEndpointPlatform\source
+Copy-Item "D:\releases\agent.exe" "C:\Program Files\Armada\agent.exe" -Force
+Set-Location C:\Program Files\ArmadaPlatform\source
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
-  -ServiceName AIEndpointAgent `
-  -InstallDir "C:\Program Files\AIEndpoint" `
+  -ServiceName ArmadaAgent `
+  -InstallDir "C:\Program Files\Armada" `
   -ServerURL "http://<server>:8070" `
   -AgentJWTSecret "<shared_agent_secret>" `
-  -LogDir "C:\ProgramData\AIEndpoint\logs" `
+  -LogDir "C:\ProgramData\Armada\logs" `
   -UseLocalSystem
 ```
 
@@ -455,14 +455,14 @@ Troubleshooting:
 ```powershell
 [Environment]::GetEnvironmentVariable("SERVER_URL","Machine")
 [Environment]::GetEnvironmentVariable("AGENT_JWT_SECRET","Machine")
-Restart-Service AIEndpointAgent
+Restart-Service ArmadaAgent
 ```
 
 - Service starts but endpoint is not visible in server UI:
 
 ```powershell
 Test-NetConnection <server> -Port 8070
-Get-ChildItem "C:\ProgramData\AIEndpoint\logs" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+Get-ChildItem "C:\ProgramData\Armada\logs" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5
 ```
 
 - Credential-based service fails (`1057`/`1069`):
@@ -473,7 +473,7 @@ Get-ChildItem "C:\ProgramData\AIEndpoint\logs" -File | Sort-Object LastWriteTime
 - Re-run installer to repair configuration:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName AIEndpointAgent -ServerURL "http://<server>:8070" -AgentJWTSecret "<shared_agent_secret>" -UseLocalSystem
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName ArmadaAgent -ServerURL "http://<server>:8070" -AgentJWTSecret "<shared_agent_secret>" -UseLocalSystem
 ```
 
 ### Option 3: Docker Deployment

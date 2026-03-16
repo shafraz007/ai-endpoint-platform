@@ -7,9 +7,9 @@ param(
     [string]$ServerURL,
     [Parameter(Mandatory = $true)]
     [string]$AgentJWTSecret,
-    [string]$ServiceName = "AIEndpointAgent",
-    [string]$InstallDir = "C:\Program Files\AIEndpoint",
-    [string]$LogDir = "C:\ProgramData\AIEndpoint\logs",
+    [string]$ServiceName = "ArmadaAgent",
+    [string]$InstallDir = "C:\Program Files\Armada",
+    [string]$LogDir = "C:\ProgramData\Armada\logs",
     [switch]$UseLocalSystem = $true,
     [string]$ServiceUser = "",
     [string]$ServicePassword = ""
@@ -37,7 +37,7 @@ Assert-Admin
 Ensure-Dir -Path $InstallDir
 Ensure-Dir -Path $LogDir
 
-$workDir = "C:\ProgramData\AIEndpoint\bootstrap"
+$workDir = "C:\ProgramData\Armada\bootstrap"
 Ensure-Dir -Path $workDir
 
 $agentPath = Join-Path $InstallDir "agent.exe"
