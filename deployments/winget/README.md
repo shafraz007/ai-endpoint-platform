@@ -34,7 +34,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deployments\winget\bootstr
 ## Private WinGet manifest notes
 
 Templates are pre-filled for this repository with:
-- `PackageIdentifier: Shafraz007.ArmadaAgent`
+- `PackageIdentifier: Armada.ArmadaAgent`
 - Publisher metadata and GitHub support URLs
 - GitHub release URL convention for installer binaries
 
@@ -134,7 +134,7 @@ Get-ChildItem "C:\ProgramData\Armada\logs"
 - run:
 
 ```powershell
-winget upgrade Shafraz007.ArmadaAgent
+winget upgrade Armada.ArmadaAgent
 ```
 
 ### 11. Rollback flow

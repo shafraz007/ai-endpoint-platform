@@ -1,14 +1,14 @@
-PackageIdentifier: Shafraz007.ArmadaAgent
+PackageIdentifier: Armada.ArmadaAgent
 PackageVersion: 1.0.0
 PackageLocale: en-US
-Publisher: Shafraz007
+Publisher: Armada
 PublisherUrl: https://github.com/shafraz007
 PublisherSupportUrl: https://github.com/shafraz007/ai-endpoint-platform/issues
-Author: Shafraz007
+Author: Armada
 PackageName: Armada Agent
 PackageUrl: https://github.com/shafraz007/ai-endpoint-platform
 License: Proprietary
-Copyright: Copyright (c) Shafraz007
+Copyright: Copyright (c) Armada
 ShortDescription: Installs Armada agent and registers Windows service.
 Description: Installs a prebuilt agent binary, applies environment configuration, and starts ArmadaAgent service.
 Tags:

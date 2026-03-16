@@ -1,6 +1,6 @@
 # Development Guide
 
-This document provides guidance for developers working on the AI Endpoint Platform.
+This document provides guidance for developers working on the Armada Platform.
 
 ## Prerequisites
 

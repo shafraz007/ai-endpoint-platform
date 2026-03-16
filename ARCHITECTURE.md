@@ -1,4 +1,4 @@
-# AI Endpoint Platform - Architecture & Design
+# Armada Platform - Architecture & Design
 
 ## System Overview
 

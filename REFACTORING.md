@@ -1,7 +1,7 @@
 # Code Refactoring Summary
 
 ## Overview
-Your AI Endpoint Platform has been refactored for better maintainability, configuration management, error handling, and production readiness.
+Your Armada Platform has been refactored for better maintainability, configuration management, error handling, and production readiness.
 
 ## Key Changes
 

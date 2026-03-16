@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This guide covers deploying the AI Endpoint Platform to production environments.
+This guide covers deploying the Armada Platform to production environments.
 
 ## Pre-Deployment Checklist
 
@@ -200,7 +200,7 @@ Create `/etc/systemd/system/ai-endpoint-server.service`:
 
 ```ini
 [Unit]
-Description=AI Endpoint Platform Server
+Description=Armada Platform Server
 After=network.target postgresql.service
 Wants=postgresql.service
 
@@ -247,7 +247,7 @@ Create `/etc/systemd/system/ai-endpoint-chat-worker.service`:
 
 ```ini
 [Unit]
-Description=AI Endpoint Platform Chat Worker
+Description=Armada Platform Chat Worker
 After=network.target postgresql.service
 Wants=postgresql.service
 
