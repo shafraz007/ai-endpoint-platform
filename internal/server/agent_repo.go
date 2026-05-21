@@ -8,7 +8,7 @@ import (
 )
 
 // UpsertAgent inserts or updates an agent in the database
-func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVersion string, lastLogin, lastReboot *time.Time, timezone string, hardwareVendor, hardwareModel, hardwareSerialNumber, motherboard, biosManufacturer, biosVersion, biosVersionDate, processor, memory, videoCard, sound, systemDrive, macAddresses, disks, drives, osEdition, osVersion, osBuild, windows11Eligible, dotnetVersion, officeVersion, antivirusName, antispywareName, firewallName string, tls12Compatible bool, rebootRequired bool, patchScanAt *time.Time) error {
+func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVersion string, lastLogin, lastReboot *time.Time, timezone string, hardwareVendor, hardwareModel, hardwareSerialNumber, motherboard, biosManufacturer, biosVersion, biosVersionDate, processor, memory, videoCard, sound, systemDrive, macAddresses, disks, drives, osEdition, osVersion, osBuild, windows11Eligible, dotnetVersion, officeVersion, antivirusName, antispywareName, firewallName string, tls12Compatible bool, rebootRequired bool, patchScanAt *time.Time, runtimeType, toolsJSON, capabilitiesJSON, toolConfidenceJSON string) error {
 	if agentID == "" {
 		return fmt.Errorf("agentID cannot be empty")
 	}
@@ -27,9 +27,10 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		disks, drives,
 		os_edition, os_version, os_build, windows_11_eligible, tls_12_compatible,
 		dotnet_version, office_version, antivirus_name, antispyware_name, firewall_name,
-		reboot_required, patch_scan_at
+		reboot_required, patch_scan_at,
+		runtime_type, tools_json, capabilities_json, tool_confidence_json, tool_updated_at
 	)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41::jsonb, $42::jsonb, $43::jsonb, $44)
 	ON CONFLICT (agent_id)
 	DO UPDATE SET
 		hostname = EXCLUDED.hostname,
@@ -69,11 +70,22 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		firewall_name = EXCLUDED.firewall_name,
 		reboot_required = EXCLUDED.reboot_required,
 		patch_scan_at = EXCLUDED.patch_scan_at,
+		runtime_type = EXCLUDED.runtime_type,
+		tools_json = EXCLUDED.tools_json,
+		capabilities_json = EXCLUDED.capabilities_json,
+		tool_confidence_json = EXCLUDED.tool_confidence_json,
+		tool_updated_at = EXCLUDED.tool_updated_at,
 		updated_at = CURRENT_TIMESTAMP
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	var dbNow time.Time
+	if err := DB.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&dbNow); err != nil {
+		log.Printf("Error fetching database time for agent %s: %v", agentID, err)
+		return fmt.Errorf("database time fetch error: %w", err)
+	}
 
 	_, err := DB.Exec(ctx, query,
 		agentID,
@@ -82,12 +94,12 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		publicIP,
 		privateIP,
 		lastLogin,
-		time.Now(),
+		dbNow,
 		lastReboot,
 		timezone,
 		agentVersion,
 		status,
-		time.Now(),
+		dbNow,
 		hardwareVendor,
 		hardwareModel,
 		hardwareSerialNumber,
@@ -115,6 +127,11 @@ func UpsertAgent(agentID, hostname, domain, publicIP, privateIP, status, agentVe
 		firewallName,
 		rebootRequired,
 		patchScanAt,
+		runtimeType,
+		toolsJSON,
+		capabilitiesJSON,
+		toolConfidenceJSON,
+		dbNow,
 	)
 
 	if err != nil {

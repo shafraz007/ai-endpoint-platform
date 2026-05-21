@@ -20,17 +20,17 @@ import (
 )
 
 type chatTaskEnvelope struct {
-	Type      string    `json:"type"`
-	Version   int       `json:"version"`
-	MessageID int64     `json:"message_id"`
-	AgentID   string    `json:"agent_id"`
-	SessionID int64     `json:"session_id,omitempty"`
-	Scope     string    `json:"scope"`
-	Attempt   int       `json:"attempt"`
-	MaxAttempts int     `json:"max_attempts"`
-	DedupeKey string    `json:"dedupe_key"`
-	Task      ai.Task   `json:"task"`
-	CreatedAt time.Time `json:"created_at"`
+	Type        string    `json:"type"`
+	Version     int       `json:"version"`
+	MessageID   int64     `json:"message_id"`
+	AgentID     string    `json:"agent_id"`
+	SessionID   int64     `json:"session_id,omitempty"`
+	Scope       string    `json:"scope"`
+	Attempt     int       `json:"attempt"`
+	MaxAttempts int       `json:"max_attempts"`
+	DedupeKey   string    `json:"dedupe_key"`
+	Task        ai.Task   `json:"task"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type deadLetterEnvelope struct {
@@ -49,10 +49,10 @@ type deadLetterEnvelope struct {
 }
 
 type workerQueueRuntime struct {
-	publisher    queue.Publisher
+	publisher      queue.Publisher
 	publishSubject string
-	dlqSubject   string
-	maxAttempts  int
+	dlqSubject     string
+	maxAttempts    int
 }
 
 var workerRuntime workerQueueRuntime
@@ -115,11 +115,11 @@ func main() {
 	log.Printf("chat worker starting (provider=%s subject=%s group=%s dlq=%s max_attempts=%d)", cfg.QueueProvider, subject, consumerGroup, dlqSubject, maxAttempts)
 
 	err = queue.Subscribe(ctx, queue.SubscriberConfig{
-		Provider: cfg.QueueProvider,
-		NATSURL:  cfg.QueueNATSURL,
-		Subject:  subject,
+		Provider:   cfg.QueueProvider,
+		NATSURL:    cfg.QueueNATSURL,
+		Subject:    subject,
 		QueueGroup: consumerGroup,
-		Timeout:  5 * time.Second,
+		Timeout:    5 * time.Second,
 	}, handleQueueMessage)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("queue subscription failed: %v", err)

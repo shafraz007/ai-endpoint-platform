@@ -126,7 +126,12 @@ func buildPersonalChatTimeoutIsolatedReply(userMessage string, cfg config.AgentC
 		return buildPersonalChatFallbackReply(userMessage, sysInfo, osInfo)
 	}
 
-	liveDiagnostics := strings.TrimSpace(buildPersonalChatLiveToolContext(userMessage, cfg, sysInfo, osInfo))
+	currentMessage := resolvePersonalChatUserMessage(userMessage)
+	if currentMessage == "" {
+		currentMessage = strings.TrimSpace(userMessage)
+	}
+
+	liveDiagnostics := strings.TrimSpace(buildPersonalChatLiveToolContext(currentMessage, cfg, sysInfo, osInfo))
 	if liveDiagnostics != "" {
 		if len(liveDiagnostics) > maxChatFallbackDiagnosticsChars {
 			liveDiagnostics = strings.TrimSpace(liveDiagnostics[:maxChatFallbackDiagnosticsChars]) + "\n...truncated"
@@ -134,8 +139,8 @@ func buildPersonalChatTimeoutIsolatedReply(userMessage string, cfg config.AgentC
 		return "AI response timed out before full analysis completed. Sharing latest live diagnostics:\n\n" + liveDiagnostics + "\n\nRetry once more for full interpretation."
 	}
 
-	snapshot := strings.TrimSpace(buildFallbackTaskDetails(userMessage, sysInfo, osInfo))
-	if snapshot == "" || snapshot == strings.TrimSpace(userMessage) {
+	snapshot := strings.TrimSpace(buildFallbackTaskDetails(currentMessage, sysInfo, osInfo))
+	if snapshot == "" || snapshot == strings.TrimSpace(currentMessage) {
 		return "AI response timed out before completion. The request is still valid—please retry in a moment for full analysis."
 	}
 

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -22,13 +24,18 @@ type OSInfo struct {
 	FirewallName      string `json:"firewall_name"`
 }
 
-// CollectOSInfo gathers OS and security information
+// CollectOSInfo gathers OS and security information for the current platform.
 func CollectOSInfo() *OSInfo {
 	osInfo := &OSInfo{
-		TLS12Compatible: true, // Default to true for modern systems
+		TLS12Compatible: true,
 	}
 
-	// Collect OS information using registry and WMI
+	if runtime.GOOS != "windows" {
+		populateNonWindowsOSInfo(osInfo)
+		return osInfo
+	}
+
+	// Windows: collect via registry/WMI through PowerShell.
 	osEdition := runPowerShellCommand(`(Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "EditionID" -ErrorAction SilentlyContinue).EditionID`)
 	if osEdition != "" {
 		osInfo.OSEdition = osEdition
@@ -77,6 +84,79 @@ func CollectOSInfo() *OSInfo {
 	osInfo.FirewallName = "Windows Firewall"
 
 	return osInfo
+}
+
+// populateNonWindowsOSInfo fills in OSInfo fields for Linux and macOS endpoints.
+func populateNonWindowsOSInfo(osInfo *OSInfo) {
+	switch runtime.GOOS {
+	case "linux":
+		populateLinuxOSInfo(osInfo)
+	case "darwin":
+		populateDarwinOSInfo(osInfo)
+	default:
+		osInfo.OSEdition = runtime.GOOS
+	}
+}
+
+// populateLinuxOSInfo reads /etc/os-release and kernel version.
+func populateLinuxOSInfo(osInfo *OSInfo) {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		osInfo.OSEdition = "Linux"
+	} else {
+		fields := parseOSRelease(string(data))
+		if v, ok := fields["PRETTY_NAME"]; ok {
+			osInfo.OSEdition = v
+		} else if v, ok := fields["NAME"]; ok {
+			osInfo.OSEdition = v
+		} else {
+			osInfo.OSEdition = "Linux"
+		}
+		if v, ok := fields["VERSION_ID"]; ok {
+			osInfo.OSVersion = v
+		}
+	}
+	// Kernel release as build identifier.
+	if out, kerr := exec.Command("uname", "-r").Output(); kerr == nil {
+		osInfo.OSBuild = strings.TrimSpace(string(out))
+	}
+	// Detect active firewall manager.
+	for _, fw := range []string{"ufw", "firewalld", "iptables", "nftables"} {
+		if _, lerr := exec.LookPath(fw); lerr == nil {
+			osInfo.FirewallName = fw
+			break
+		}
+	}
+}
+
+// populateDarwinOSInfo collects macOS version information via sw_vers.
+func populateDarwinOSInfo(osInfo *OSInfo) {
+	if out, err := exec.Command("sw_vers", "-productName").Output(); err == nil {
+		osInfo.OSEdition = strings.TrimSpace(string(out))
+	} else {
+		osInfo.OSEdition = "macOS"
+	}
+	if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
+		osInfo.OSVersion = strings.TrimSpace(string(out))
+	}
+	if out, err := exec.Command("sw_vers", "-buildVersion").Output(); err == nil {
+		osInfo.OSBuild = strings.TrimSpace(string(out))
+	}
+}
+
+// parseOSRelease parses /etc/os-release key=value pairs into a map.
+func parseOSRelease(data string) map[string]string {
+	result := make(map[string]string)
+	for _, line := range strings.Split(data, "\n") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.Trim(strings.TrimSpace(parts[1]), `"`)
+		result[key] = value
+	}
+	return result
 }
 
 // runPowerShellCommand executes a PowerShell command and returns the output

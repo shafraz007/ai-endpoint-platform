@@ -497,6 +497,15 @@
             background: #fff;
         }
 
+        .agents-search {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            min-width: 240px;
+            background: #fff;
+        }
+
         .pager-btn {
             background: transparent;
             color: #667eea;
@@ -516,6 +525,63 @@
         .pager-info {
             color: #666;
             font-size: 12px;
+        }
+
+        .agent-actions-cell {
+            position: relative;
+            width: 110px;
+        }
+
+        .agent-actions-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .agent-actions-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 4px);
+            min-width: 180px;
+            background: #fff;
+            border: 1px solid #e6eaed;
+            border-radius: 8px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+            z-index: 30;
+            overflow: hidden;
+        }
+
+        .agent-actions-cell.open .agent-actions-menu {
+            display: block;
+        }
+
+        .agent-actions-menu button,
+        .agent-actions-menu a {
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: none;
+            background: #fff;
+            color: #333;
+            padding: 10px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .agent-actions-menu button:hover,
+        .agent-actions-menu a:hover {
+            background: #f5f7fb;
+        }
+
+        .agent-actions-menu .danger {
+            color: #b91c1c;
         }
 
         .issues-panel {
@@ -926,6 +992,8 @@
                         <option value="50">50</option>
                         <option value="100">100</option>
                     </select>
+                    <input id="agents-search" class="agents-search" type="text" placeholder="Search hostname, agent ID, IP, domain, status...">
+                    <a class="ghost-btn" id="agents-view-all-link" href="/agents/manage">View All</a>
                 </div>
                 <div class="list-controls-right">
                     <button id="agents-prev" class="pager-btn" type="button">Prev</button>
@@ -945,11 +1013,12 @@
                         <th>Version</th>
                         <th>Timezone</th>
                         <th>Last Seen</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="agents-table-body">
                     {{range .Agents}}
-                    <tr onclick="window.location.href='/agents/{{.AgentID}}';" style="cursor: pointer;">
+                    <tr onclick="window.location.href='/agents/{{.AgentID}}';" style="cursor: pointer;" data-agent-id="{{.AgentID}}">
                         <td><span class="hostname">{{.Hostname}}</span></td>
                         <td><code style="background: #f5f5f5; padding: 3px 8px; border-radius: 3px; font-size: 12px;">{{.AgentID}}</code></td>
                         <td>{{if .Domain}}{{.Domain}}{{else}}<span style="color: #ccc;">-</span>{{end}}</td>
@@ -961,10 +1030,25 @@
                         <td>{{if .AgentVersion}}{{.AgentVersion}}{{else}}<span style="color: #ccc;">-</span>{{end}}</td>
                         <td>{{if .Timezone}}{{.Timezone}}{{else}}<span style="color: #ccc;">-</span>{{end}}</td>
                         <td><span class="timestamp">{{.LastSeen.Format "2006-01-02 15:04:05"}}</span></td>
+                        <td class="agent-actions-cell" onclick="event.stopPropagation()">
+                            <button type="button" class="agent-actions-btn" data-agent-actions-toggle>Actions ▾</button>
+                            <div class="agent-actions-menu">
+                                <a href="/agents/{{.AgentID}}">View Details</a>
+                                <a href="/agents/manage">View All</a>
+                                <button type="button" class="danger" data-agent-delete-id="{{.AgentID}}">Delete Agent</button>
+                            </div>
+                        </td>
                     </tr>
                     {{end}}
                 </tbody>
             </table>
+            <div class="list-controls" style="padding: 10px 15px 14px 15px; border-top: none; justify-content: flex-end;">
+                <div class="list-controls-right">
+                    <button id="agents-prev-bottom" class="pager-btn" type="button">Prev</button>
+                    <span id="agents-page-info-bottom" class="pager-info">Page 1</span>
+                    <button id="agents-next-bottom" class="pager-btn" type="button">Next</button>
+                </div>
+            </div>
             {{else}}
             <div class="no-data">
                 <p>📋 No agents registered yet</p>
@@ -1071,11 +1155,15 @@
             issues: { page: 1, limit: 10, total: 0 },
         };
 
+        const DISPLAY_TIMEZONE = {{if .DisplayTimezone}}"{{.DisplayTimezone}}"{{else}}null{{end}};
+
         function formatTimestamp(value) {
             if (!value) return 'n/a';
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return 'n/a';
-            return date.toLocaleString();
+            const opts = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+            if (DISPLAY_TIMEZONE) opts.timeZone = DISPLAY_TIMEZONE;
+            return date.toLocaleString(undefined, opts);
         }
 
         function setGlobalChatStatus(message, type) {
@@ -1166,7 +1254,7 @@
                 const response = await fetch('/api/chat/sessions?limit=100', {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -1200,7 +1288,7 @@
                     body: JSON.stringify({ title: 'New Chat' }),
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -1259,11 +1347,36 @@
             const info = document.getElementById(prefix + '-page-info');
             const prev = document.getElementById(prefix + '-prev');
             const next = document.getElementById(prefix + '-next');
+            const infoBottom = document.getElementById(prefix + '-page-info-bottom');
+            const prevBottom = document.getElementById(prefix + '-prev-bottom');
+            const nextBottom = document.getElementById(prefix + '-next-bottom');
             if (info) {
                 info.textContent = `Page ${state.page} / ${state.totalPages} • ${state.total} item(s)`;
             }
+            if (infoBottom) {
+                infoBottom.textContent = `Page ${state.page} / ${state.totalPages} • ${state.total} item(s)`;
+            }
             if (prev) prev.disabled = state.page <= 1;
             if (next) next.disabled = state.page >= state.totalPages;
+            if (prevBottom) prevBottom.disabled = state.page <= 1;
+            if (nextBottom) nextBottom.disabled = state.page >= state.totalPages;
+        }
+
+        function getFilteredAgentRows() {
+            const tbody = document.getElementById('agents-table-body');
+            if (!tbody) return [];
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const searchInput = document.getElementById('agents-search');
+            const query = String(searchInput && searchInput.value || '').trim().toLowerCase();
+            if (!query) {
+                return rows;
+            }
+
+            return rows.filter((row) => {
+                const text = String(row.textContent || '').toLowerCase();
+                return text.includes(query);
+            });
         }
 
         function renderAgentsTablePage() {
@@ -1271,16 +1384,62 @@
             if (!tbody) return;
 
             const rows = Array.from(tbody.querySelectorAll('tr'));
-            const result = paginateArray(rows, pagination.agents.page, pagination.agents.limit);
+            const filteredRows = getFilteredAgentRows();
+            const result = paginateArray(filteredRows, pagination.agents.page, pagination.agents.limit);
             pagination.agents.page = result.currentPage;
             pagination.agents.total = result.total;
             pagination.agents.totalPages = result.totalPages;
 
-            rows.forEach((row, idx) => {
-                row.style.display = (idx >= (result.currentPage - 1) * pagination.agents.limit && idx < (result.currentPage * pagination.agents.limit)) ? '' : 'none';
+            rows.forEach((row) => {
+                row.style.display = 'none';
+            });
+
+            result.paged.forEach((row) => {
+                row.style.display = '';
             });
 
             updatePagerControls('agents', pagination.agents);
+        }
+
+        function closeAllAgentActionMenus() {
+            document.querySelectorAll('.agent-actions-cell.open').forEach((cell) => {
+                cell.classList.remove('open');
+            });
+        }
+
+        async function deleteAgent(agentID) {
+            const safeID = String(agentID || '').trim();
+            if (!safeID) return;
+
+            const confirmed = confirm('Delete agent ' + safeID + '? This also removes related commands, metrics, chat history, schedules, and issues.');
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(safeID), {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error((msg && msg.trim()) ? msg.trim() : ('Delete failed: ' + response.status));
+                }
+
+                const row = document.querySelector('tr[data-agent-id="' + safeID.replace(/"/g, '\\"') + '"]');
+                if (row && row.parentNode) {
+                    row.parentNode.removeChild(row);
+                }
+
+                pagination.agents.page = 1;
+                renderAgentsTablePage();
+                setGlobalChatStatus('Agent deleted successfully.', 'ok');
+            } catch (err) {
+                setGlobalChatStatus(err.message || 'Failed to delete agent.', 'error');
+            }
         }
 
         function extractExplicitCommandsFromMessage(message) {
@@ -1782,7 +1941,7 @@
                 const response = await fetch('/api/chat/messages?scope=global&limit=100&session_id=' + encodeURIComponent(String(sessionID)), {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -1906,7 +2065,7 @@
                     }),
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2106,7 +2265,7 @@
                     body: JSON.stringify(body),
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2143,7 +2302,7 @@
                     credentials: 'same-origin',
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2187,7 +2346,7 @@
                     body: JSON.stringify({ minutes: Math.floor(minutes) }),
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2224,7 +2383,7 @@
                     credentials: 'same-origin',
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2261,7 +2420,7 @@
                 const response = await fetch('/api/issues?' + params.toString(), {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2294,8 +2453,11 @@
         const issuesCategoryFilter = document.getElementById('issues-filter-category');
         const issuesAgentFilter = document.getElementById('issues-filter-agent');
         const agentsLimit = document.getElementById('agents-limit');
+        const agentsSearch = document.getElementById('agents-search');
         const agentsPrev = document.getElementById('agents-prev');
         const agentsNext = document.getElementById('agents-next');
+        const agentsPrevBottom = document.getElementById('agents-prev-bottom');
+        const agentsNextBottom = document.getElementById('agents-next-bottom');
         const issuesLimit = document.getElementById('issues-limit');
         const issuesPrev = document.getElementById('issues-prev');
         const issuesNext = document.getElementById('issues-next');
@@ -2409,6 +2571,12 @@
                 renderAgentsTablePage();
             });
         }
+        if (agentsSearch) {
+            agentsSearch.addEventListener('input', () => {
+                pagination.agents.page = 1;
+                renderAgentsTablePage();
+            });
+        }
         if (agentsPrev) {
             agentsPrev.addEventListener('click', () => {
                 pagination.agents.page = Math.max(1, pagination.agents.page - 1);
@@ -2417,6 +2585,18 @@
         }
         if (agentsNext) {
             agentsNext.addEventListener('click', () => {
+                pagination.agents.page = pagination.agents.page + 1;
+                renderAgentsTablePage();
+            });
+        }
+        if (agentsPrevBottom) {
+            agentsPrevBottom.addEventListener('click', () => {
+                pagination.agents.page = Math.max(1, pagination.agents.page - 1);
+                renderAgentsTablePage();
+            });
+        }
+        if (agentsNextBottom) {
+            agentsNextBottom.addEventListener('click', () => {
                 pagination.agents.page = pagination.agents.page + 1;
                 renderAgentsTablePage();
             });
@@ -2441,6 +2621,32 @@
                 renderGlobalIssues(latestGlobalIssues);
             });
         }
+
+        document.querySelectorAll('[data-agent-actions-toggle]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const cell = btn.closest('.agent-actions-cell');
+                if (!cell) return;
+
+                const opening = !cell.classList.contains('open');
+                closeAllAgentActionMenus();
+                if (opening) {
+                    cell.classList.add('open');
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-agent-delete-id]').forEach((btn) => {
+            btn.addEventListener('click', async (event) => {
+                event.stopPropagation();
+                closeAllAgentActionMenus();
+                await deleteAgent(btn.getAttribute('data-agent-delete-id'));
+            });
+        });
+
+        document.addEventListener('click', () => {
+            closeAllAgentActionMenus();
+        });
 
         renderAgentsTablePage();
         loadGlobalChatSessions().then(() => {

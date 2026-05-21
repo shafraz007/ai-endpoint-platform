@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Queue tuning settings for worker retries and DLQ routing (`QUEUE_AGENT_CHAT_MAX_ATTEMPTS`, `QUEUE_AGENT_CHAT_DLQ_SUBJECT`)
 - Windows agent process singleton guard to prevent multi-instance duplication noise
 - DLQ inspection helper script: `scripts/show-chat-dlq.ps1`
+- Versioned OS patch rollout policy enforcement for signed update manifests (`policy_version`, allowed/default manifest versions, action TTL bounds)
+- Deterministic staged rollout ring assignment (`ring_count`, `active_ring`, `ring_salt`) for install-update command gating
+- Rollout health gates and auto rollback behavior to reduce effective active ring on unhealthy install outcomes
+- Admin rollout approval control APIs and Settings UI controls (`/api/os-patch/rollout-policy`, `/api/os-patch/rollout-policy/reset`)
+- OS patch rollout telemetry report API and Reports UI panel (`/api/reports/os-patch-rollout`) with gate state, ring distribution, and recent install events
+- Self-update history report API and Reports UI tab (`/api/reports/self-updates`) with filters for time window, status, target version, agent ID, and hostname
+- Command requeue API (`POST /api/agents/{id}/commands/{command_id}/requeue`) and agent detail UI action for eligible historical commands
 
 ### Changed
 
@@ -46,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent Ollama local endpoint handling now prefers native `/api/chat` path for localhost `11434` targets
 - Native Ollama request payload now explicitly uses non-streaming mode for deterministic parsing
 - Queue path idempotency for chat `ai_task` command creation hardened to avoid duplicate queue-side inserts
+- Install-update queueing now enforces effective ring gating with health-aware active-ring resolution; uninstall actions remain permitted outside install ring gates
 
 ## [1.2.0] - 2026-02-17
 

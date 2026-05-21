@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -52,8 +53,13 @@ type Agent struct {
 	AntiSpywareName string
 	FirewallName    string
 	// Disk and drive JSON blobs
-	Disks  string
-	Drives string
+	Disks              string
+	Drives             string
+	RuntimeType        string
+	ToolsJSON          string
+	CapabilitiesJSON   string
+	ToolConfidenceJSON string
+	LearnedScoresJSON  string
 }
 
 // GetAllAgents retrieves all agents from the database
@@ -79,6 +85,8 @@ func GetAllAgents(ctx context.Context) ([]Agent, error) {
 		COALESCE(office_version, ''), COALESCE(antivirus_name, ''),
 		COALESCE(antispyware_name, ''), COALESCE(firewall_name, '')
 		, COALESCE(disks, ''), COALESCE(drives, '')
+		, COALESCE(runtime_type, ''), COALESCE(tools_json::text, '[]'), COALESCE(capabilities_json::text, '[]'), COALESCE(tool_confidence_json::text, '{}')
+		, COALESCE((SELECT jsonb_object_agg(ts.tool_key, ts.score) FROM agent_tool_scores ts WHERE ts.agent_id = agents.agent_id)::text, '{}')
 	FROM agents
 	ORDER BY last_seen DESC
 	`
@@ -136,6 +144,11 @@ func GetAllAgents(ctx context.Context) ([]Agent, error) {
 			&agent.FirewallName,
 			&agent.Disks,
 			&agent.Drives,
+			&agent.RuntimeType,
+			&agent.ToolsJSON,
+			&agent.CapabilitiesJSON,
+			&agent.ToolConfidenceJSON,
+			&agent.LearnedScoresJSON,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan agent: %w", err)
@@ -173,6 +186,8 @@ func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 		COALESCE(office_version, ''), COALESCE(antivirus_name, ''),
 		COALESCE(antispyware_name, ''), COALESCE(firewall_name, '')
 		, COALESCE(disks, ''), COALESCE(drives, '')
+		, COALESCE(runtime_type, ''), COALESCE(tools_json::text, '[]'), COALESCE(capabilities_json::text, '[]'), COALESCE(tool_confidence_json::text, '{}')
+		, COALESCE((SELECT jsonb_object_agg(ts.tool_key, ts.score) FROM agent_tool_scores ts WHERE ts.agent_id = agents.agent_id)::text, '{}')
 	FROM agents
 	WHERE agent_id = $1
 	`
@@ -222,6 +237,11 @@ func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 		&agent.FirewallName,
 		&agent.Disks,
 		&agent.Drives,
+		&agent.RuntimeType,
+		&agent.ToolsJSON,
+		&agent.CapabilitiesJSON,
+		&agent.ToolConfidenceJSON,
+		&agent.LearnedScoresJSON,
 	)
 
 	if err != nil {
@@ -229,4 +249,18 @@ func GetAgentByID(ctx context.Context, agentID string) (*Agent, error) {
 	}
 
 	return &agent, nil
+}
+
+func DeleteAgent(ctx context.Context, agentID string) (bool, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return false, fmt.Errorf("agentID is required")
+	}
+
+	result, err := DB.Exec(ctx, `DELETE FROM agents WHERE agent_id = $1`, agentID)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete agent: %w", err)
+	}
+
+	return result.RowsAffected() > 0, nil
 }

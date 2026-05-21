@@ -13,7 +13,9 @@ import (
 	"time"
 )
 
-const agentVersion = "1.0.0"
+// agentVersion is injected at build time via ldflags
+// If not set during build, defaults to "1.0.0"
+var agentVersion = "1.0.0-dev"
 
 // SystemInfo contains system information collected from the agent
 type SystemInfo struct {
@@ -845,4 +847,11 @@ func getMACAddresses() string {
 		macStr += mac
 	}
 	return macStr
+}
+
+// SetAgentVersion sets the agent version (called from main with ldflags)
+func SetAgentVersion(version string) {
+	if version != "" && version != "dev" {
+		agentVersion = version
+	}
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -323,6 +324,12 @@ func DispatchDueSchedules(ctx context.Context, now time.Time, limit int) (Dispat
 		for _, agentID := range agentIDs {
 			if strings.TrimSpace(agentID) == "" {
 				continue
+			}
+			if err := validatePowerCommandTarget(ctx, agentID, commandType); err != nil {
+				if errors.Is(err, ErrPowerCommandBlocked) {
+					continue
+				}
+				return DispatchResult{}, fmt.Errorf("failed to validate command target for schedule %d and agent %s: %w", schedule.ID, agentID, err)
 			}
 			if shouldDeduplicatePowerCommand(commandType) {
 				exists, err := hasInFlightCommandTx(ctx, tx, agentID, commandType)

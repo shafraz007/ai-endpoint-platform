@@ -160,6 +160,31 @@
         .pill-other { background: #e2e8f0; color: #334155; }
 
         .muted { color: var(--muted); }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid var(--line);
+            color: var(--ink);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #1f2933;
+        }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
     </style>
 </head>
 <body>
@@ -179,49 +204,137 @@
 
         <section class="section">
             <div id="status"></div>
-            <div class="form-grid">
-                <div>
-                    <label for="from">From</label>
-                    <input id="from" type="datetime-local">
-                </div>
-                <div>
-                    <label for="to">To</label>
-                    <input id="to" type="datetime-local">
-                </div>
-                <div>
-                    <label for="schedule-id">Schedule</label>
-                    <select id="schedule-id"></select>
-                </div>
-                <div>
-                    <label for="group-id">Group</label>
-                    <select id="group-id"></select>
-                </div>
-                <div>
-                    <label for="agent-id">Agent ID</label>
-                    <input id="agent-id" placeholder="optional exact agent id">
-                </div>
-                <div>
-                    <label for="limit">Limit</label>
-                    <input id="limit" type="number" min="1" max="2000" value="300">
-                </div>
+            <div class="tabs">
+                <button class="tab-btn active" type="button" data-tab="executions" onclick="switchTab('executions')">Schedule Executions</button>
+                <button class="tab-btn" type="button" data-tab="self-updates" onclick="switchTab('self-updates')">Self Update History</button>
+                <button class="tab-btn" type="button" data-tab="rollout" onclick="switchTab('rollout')">OS Patch Rollout</button>
             </div>
-            <div class="button-row">
-                <button class="secondary" type="button" onclick="resetFilters()">Reset</button>
-                <button type="button" onclick="loadReports()">Run Report</button>
-            </div>
-        </section>
 
-        <section class="section">
-            <table id="report-table"></table>
+            <div id="panel-executions" class="tab-panel active">
+                <div class="form-grid">
+                    <div>
+                        <label for="from">From</label>
+                        <input id="from" type="datetime-local">
+                    </div>
+                    <div>
+                        <label for="to">To</label>
+                        <input id="to" type="datetime-local">
+                    </div>
+                    <div>
+                        <label for="schedule-id">Schedule</label>
+                        <select id="schedule-id"></select>
+                    </div>
+                    <div>
+                        <label for="group-id">Group</label>
+                        <select id="group-id"></select>
+                    </div>
+                    <div>
+                        <label for="agent-id">Agent ID</label>
+                        <input id="agent-id" placeholder="optional exact agent id">
+                    </div>
+                    <div>
+                        <label for="limit">Limit</label>
+                        <input id="limit" type="number" min="1" max="2000" value="300">
+                    </div>
+                </div>
+                <div class="button-row">
+                    <button class="secondary" type="button" onclick="resetFilters()">Reset</button>
+                    <button type="button" onclick="loadReports()">Run Report</button>
+                </div>
+                <div style="margin-top:12px;">
+                    <table id="report-table"></table>
+                </div>
+            </div>
+
+            <div id="panel-self-updates" class="tab-panel">
+                <div class="form-grid">
+                    <div>
+                        <label for="su-from">From</label>
+                        <input id="su-from" type="datetime-local">
+                    </div>
+                    <div>
+                        <label for="su-to">To</label>
+                        <input id="su-to" type="datetime-local">
+                    </div>
+                    <div>
+                        <label for="su-status">Status</label>
+                        <input id="su-status" placeholder="queued, running, succeeded, failed">
+                    </div>
+                    <div>
+                        <label for="su-target-version">Target Version</label>
+                        <input id="su-target-version" placeholder="e.g. 1.0.8">
+                    </div>
+                    <div>
+                        <label for="su-agent-id">Agent ID</label>
+                        <input id="su-agent-id" placeholder="optional exact agent id">
+                    </div>
+                    <div>
+                        <label for="su-hostname">Hostname</label>
+                        <input id="su-hostname" placeholder="optional hostname substring">
+                    </div>
+                    <div>
+                        <label for="su-limit">Limit</label>
+                        <input id="su-limit" type="number" min="1" max="2000" value="200">
+                    </div>
+                </div>
+                <div class="button-row">
+                    <button class="secondary" type="button" onclick="resetSelfUpdateFilters()">Reset</button>
+                    <button type="button" onclick="loadSelfUpdateReports()">Run Report</button>
+                </div>
+                <div style="margin-top:12px;">
+                    <table id="self-update-table"></table>
+                </div>
+            </div>
+
+            <div id="panel-rollout" class="tab-panel">
+                <h2 style="margin-bottom:10px; font-size:1.05em;">OS Patch Rollout Telemetry</h2>
+                <div class="button-row" style="margin-bottom:10px;">
+                    <button class="secondary" type="button" onclick="loadRolloutTelemetry()">Refresh Rollout Telemetry</button>
+                </div>
+                <div id="rollout-summary" class="muted" style="margin-bottom:10px;">No rollout telemetry loaded yet.</div>
+                <table id="rollout-ring-table" style="margin-bottom:12px;"></table>
+                <table id="rollout-recent-table"></table>
+            </div>
         </section>
     </div>
 
     <script>
+        const DISPLAY_TIMEZONE = {{if .DisplayTimezone}}"{{.DisplayTimezone}}"{{else}}null{{end}};
+
+        function formatTimestamp(value) {
+            if (!value) return '-';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '-';
+            const opts = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+            if (DISPLAY_TIMEZONE) opts.timeZone = DISPLAY_TIMEZONE;
+            return date.toLocaleString(undefined, opts);
+        }
+
         const api = {
             schedules: '/api/schedules?limit=500',
             groups: '/api/groups',
-            reports: '/api/reports/executions'
+			reports: '/api/reports/executions',
+			selfUpdates: '/api/reports/self-updates',
+			rolloutTelemetry: '/api/reports/os-patch-rollout?limit=50'
         };
+
+        function switchTab(name) {
+            const buttons = Array.from(document.querySelectorAll('.tab-btn'));
+            buttons.forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-tab') === name);
+            });
+
+            const panels = {
+                executions: document.getElementById('panel-executions'),
+                'self-updates': document.getElementById('panel-self-updates'),
+                rollout: document.getElementById('panel-rollout')
+            };
+            Object.keys(panels).forEach(key => {
+                const panel = panels[key];
+                if (!panel) return;
+                panel.classList.toggle('active', key === name);
+            });
+        }
 
         function showStatus(message, type) {
             const el = document.getElementById('status');
@@ -238,7 +351,7 @@
 
         async function apiFetch(url) {
             const response = await fetch(url, { credentials: 'same-origin' });
-            if (response.status === 401 || response.status === 403) {
+            if (response.status === 401) {
                 window.location.href = '/session-timeout?next=' + encodeURIComponent('/reports');
                 return [];
             }
@@ -279,6 +392,19 @@
             showStatus('', 'ok');
         }
 
+        function resetSelfUpdateFilters() {
+            const now = new Date();
+            const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            document.getElementById('su-from').value = localDateTimeValue(from);
+            document.getElementById('su-to').value = localDateTimeValue(now);
+            document.getElementById('su-status').value = '';
+            document.getElementById('su-target-version').value = '';
+            document.getElementById('su-agent-id').value = '';
+            document.getElementById('su-hostname').value = '';
+            document.getElementById('su-limit').value = '200';
+            showStatus('', 'ok');
+        }
+
         function badgeClass(status) {
             const s = (status || '').toLowerCase();
             if (s === 'succeeded' || s === 'completed') return 'pill pill-ok';
@@ -304,7 +430,7 @@
                     : ('Agent ' + (item.target_agent_id || '-'));
                 const agent = item.agent_hostname ? (item.agent_hostname + ' (' + item.agent_id + ')') : item.agent_id;
                 html += '<tr>' +
-                    '<td>' + new Date(item.created_at).toLocaleString() + '</td>' +
+                    '<td>' + formatTimestamp(item.created_at) + '</td>' +
                     '<td>#' + item.schedule_id + ' - ' + (item.schedule_name || '') + '</td>' +
                     '<td>' + target + '</td>' +
                     '<td class="mono">' + (agent || '') + '</td>' +
@@ -321,6 +447,97 @@
             table.innerHTML = html;
         }
 
+        function renderRolloutTable(tableId, headers, rows) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            if (!rows || rows.length === 0) {
+                table.innerHTML = '<thead><tr>' + headers.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody><tr><td colspan="' + headers.length + '" class="muted">No data.</td></tr></tbody>';
+                return;
+            }
+
+            let html = '<thead><tr>' + headers.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>';
+            rows.forEach(row => {
+                html += '<tr>' + row.map(cell => '<td>' + cell + '</td>').join('') + '</tr>';
+            });
+            html += '</tbody>';
+            table.innerHTML = html;
+        }
+
+        function renderSelfUpdateTable(rows) {
+            const table = document.getElementById('self-update-table');
+            if (!rows || rows.length === 0) {
+                table.innerHTML = '<thead><tr><th>No records</th></tr></thead><tbody><tr><td class="muted">No self update history found for selected filters.</td></tr></tbody>';
+                return;
+            }
+
+            const header = ['Queued', 'Completed', 'Agent', 'Command', 'Target Version', 'Status', 'Output', 'Error'];
+            let html = '<thead><tr>' + header.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>';
+            rows.forEach(item => {
+                const agent = item.agent_hostname
+                    ? (item.agent_hostname + ' (' + (item.agent_id || '-') + ')')
+                    : String(item.agent_id || '-');
+                html += '<tr>' +
+                    '<td>' + (item.queued_at ? formatTimestamp(item.queued_at) : '-') + '</td>' +
+                    '<td>' + (item.completed_at ? formatTimestamp(item.completed_at) : '-') + '</td>' +
+                    '<td class="mono">' + agent + '</td>' +
+                    '<td>' + (item.command_id ? ('#' + item.command_id) : '-') + '</td>' +
+                    '<td>' + (item.target_version || '') + '</td>' +
+                    '<td><span class="' + badgeClass(item.status) + '">' + (item.status || '') + '</span></td>' +
+                    '<td class="mono">' + (item.output || '') + '</td>' +
+                    '<td class="mono">' + (item.error || '') + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody>';
+            table.innerHTML = html;
+        }
+
+        function formatRolloutGateState(value) {
+            const state = String(value || '').toLowerCase();
+            if (!state) return 'unknown';
+            return state.replace(/_/g, ' ');
+        }
+
+        async function loadRolloutTelemetry() {
+            try {
+                const data = await apiFetch(api.rolloutTelemetry);
+                const policy = data.policy || {};
+                const health = data.health_snapshot || {};
+                const summaryEl = document.getElementById('rollout-summary');
+                if (summaryEl) {
+                    summaryEl.textContent =
+                        'Gate: ' + formatRolloutGateState(data.gate_state) +
+                        ' • Active ring ' + (policy.active_ring || '-') + '/' + (policy.ring_count || '-') +
+                        ' (effective ' + (data.effective_active_ring || '-') + ')' +
+                        ' • Failure ' + Number(health.failure_rate_pct || 0).toFixed(1) + '% (' + (health.failures || 0) + '/' + (health.samples || 0) + ')' +
+                        ' • Generated ' + formatTimestamp(data.generated_at);
+                }
+
+                const ringRows = (data.ring_summary || []).map(item => [
+                    String(item.ring || '-'),
+                    String(item.agent_count || 0),
+                    String(item.install_open || 0)
+                ]);
+                renderRolloutTable('rollout-ring-table', ['Ring', 'Agents', 'Install Open'], ringRows);
+
+                const recentRows = (data.recent_installs || []).map(item => [
+                    formatTimestamp(item.created_at),
+                    '#' + item.command_id,
+                    String(item.agent_id || '-'),
+                    String(item.hostname || '-'),
+                    String(item.ring || '-'),
+                    '<span class="' + badgeClass(item.status) + '">' + String(item.status || '') + '</span>'
+                ]);
+                renderRolloutTable('rollout-recent-table', ['Created', 'Command', 'Agent', 'Hostname', 'Ring', 'Status'], recentRows);
+            } catch (error) {
+                const summaryEl = document.getElementById('rollout-summary');
+                if (summaryEl) {
+                    summaryEl.textContent = 'Failed to load rollout telemetry: ' + error.message;
+                }
+                renderRolloutTable('rollout-ring-table', ['Ring', 'Agents', 'Install Open'], []);
+                renderRolloutTable('rollout-recent-table', ['Created', 'Command', 'Agent', 'Hostname', 'Ring', 'Status'], []);
+            }
+        }
+
         function buildQuery() {
             const from = document.getElementById('from').value;
             const to = document.getElementById('to').value;
@@ -330,11 +547,39 @@
             const limit = document.getElementById('limit').value;
 
             const params = new URLSearchParams();
-            if (from) params.set('from', from);
-            if (to) params.set('to', to);
+            if (from) params.set('from', localDateTimeInputToRFC3339(from));
+            if (to) params.set('to', localDateTimeInputToRFC3339(to));
             if (scheduleId) params.set('schedule_id', scheduleId);
             if (groupId) params.set('group_id', groupId);
             if (agentId) params.set('agent_id', agentId);
+            if (limit) params.set('limit', limit);
+            return params.toString();
+        }
+
+        function localDateTimeInputToRFC3339(value) {
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) {
+                return value;
+            }
+            return parsed.toISOString();
+        }
+
+        function buildSelfUpdateQuery() {
+            const from = document.getElementById('su-from').value;
+            const to = document.getElementById('su-to').value;
+            const status = (document.getElementById('su-status').value || '').trim().toLowerCase();
+            const targetVersion = (document.getElementById('su-target-version').value || '').trim();
+            const agentId = (document.getElementById('su-agent-id').value || '').trim();
+            const hostname = (document.getElementById('su-hostname').value || '').trim();
+            const limit = document.getElementById('su-limit').value;
+
+            const params = new URLSearchParams();
+            if (from) params.set('from', localDateTimeInputToRFC3339(from));
+            if (to) params.set('to', localDateTimeInputToRFC3339(to));
+            if (status) params.set('status', status);
+            if (targetVersion) params.set('target_version', targetVersion);
+            if (agentId) params.set('agent_id', agentId);
+            if (hostname) params.set('hostname', hostname);
             if (limit) params.set('limit', limit);
             return params.toString();
         }
@@ -361,10 +606,26 @@
             }
         }
 
+        async function loadSelfUpdateReports() {
+            try {
+                showStatus('Loading self update history...', 'ok');
+                const query = buildSelfUpdateQuery();
+                const data = await apiFetch(api.selfUpdates + (query ? ('?' + query) : ''));
+                renderSelfUpdateTable(data || []);
+                showStatus('Loaded ' + (data ? data.length : 0) + ' self update records.', 'ok');
+            } catch (error) {
+                renderSelfUpdateTable([]);
+                showStatus('Failed to load self update history: ' + error.message, 'error');
+            }
+        }
+
         (async function init() {
             resetFilters();
+            resetSelfUpdateFilters();
             await loadLookups();
+            await loadRolloutTelemetry();
             await loadReports();
+            await loadSelfUpdateReports();
         })();
     </script>
 </body>

@@ -487,6 +487,11 @@
             color: #b43c3c;
         }
 
+        .badge-running {
+            background: #fff4de;
+            color: #8a5a12;
+        }
+
         .command-output {
             margin-top: 8px;
             padding: 10px;
@@ -495,6 +500,111 @@
             font-family: 'IBM Plex Mono', 'Courier New', monospace;
             font-size: 12px;
             white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .badge-cancelled {
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        .command-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .cancel-command-btn {
+            padding: 4px 10px;
+            background: #fce4ec;
+            color: #c2185b;
+            border: 1px solid #f8bbd0;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .cancel-command-btn:hover {
+            background: #f8bbd0;
+            color: #880e4f;
+        }
+
+        .cancel-command-btn:active {
+            transform: scale(0.95);
+        }
+
+        .requeue-command-btn {
+            padding: 4px 10px;
+            background: #e7f4ff;
+            color: #0b5fa5;
+            border: 1px solid #b9dcfa;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .requeue-command-btn:hover {
+            background: #d4ecff;
+            color: #064a82;
+        }
+
+        .requeue-command-btn:active {
+            transform: scale(0.95);
+        }
+
+        .learning-grid {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 14px;
+        }
+
+        .learning-card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fbfcfd;
+            padding: 12px 14px;
+        }
+
+        .learning-card h4 {
+            margin: 0 0 10px;
+            font-size: 13px;
+            color: var(--ink);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .learning-item {
+            border-top: 1px solid #edf1f4;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .learning-item:first-child {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 0;
+        }
+
+        .learning-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .learning-key {
+            font-weight: 600;
+            color: var(--ink);
             word-break: break-word;
         }
 
@@ -1065,6 +1175,72 @@
                         </div>
                         <button id="send-command" class="primary-btn" type="button">Send Command</button>
                         <div id="command-status" class="command-status"></div>
+
+                        <div class="learning-grid">
+                            <div class="learning-card">
+                                <div class="commands-list-header" style="margin-bottom:10px;">
+                                    <h4>Tool Scores</h4>
+                                    <button id="refresh-learning" class="ghost-btn" type="button">Refresh</button>
+                                </div>
+                                <div id="tool-scores-empty" class="empty">No tool scores yet.</div>
+                                <div id="tool-scores-list" class="commands-table"></div>
+                            </div>
+                            <div class="learning-card">
+                                <h4>Recent Action Runs</h4>
+                                <div id="action-runs-empty" class="empty">No action runs yet.</div>
+                                <div id="action-runs-list" class="commands-table"></div>
+                            </div>
+                        </div>
+
+                        <div class="learning-grid" style="margin-top:12px;">
+                            <div class="learning-card">
+                                <div class="commands-list-header" style="margin-bottom:10px;">
+                                    <h4>Agent Self-Update</h4>
+                                    <button id="queue-agent-update" class="ghost-btn" type="button">Queue Update</button>
+                                </div>
+                                <div class="field-row">
+                                    <label for="agent-update-version">Version</label>
+                                    <input id="agent-update-version" type="text" placeholder="e.g. 1.0.5.exe" />
+                                </div>
+                                <div class="field-row">
+                                    <label for="agent-update-file">Upload Binary</label>
+                                    <input id="agent-update-file" type="file" />
+                                </div>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                    <button id="upload-agent-binary" class="ghost-btn" type="button">Upload</button>
+                                    <button id="publish-agent-version" class="ghost-btn" type="button">Publish Version</button>
+                                </div>
+                                <div class="field-row" style="margin-top:8px;">
+                                    <label for="agent-update-download-url">Download URL</label>
+                                    <input id="agent-update-download-url" type="text" placeholder="/api/agent-update/download/{version}" />
+                                </div>
+                                <div class="field-row">
+                                    <label for="agent-update-sha256">SHA256</label>
+                                    <input id="agent-update-sha256" type="text" placeholder="64-char hex" />
+                                </div>
+                                <div class="field-row">
+                                    <label for="agent-update-changelog">Changelog</label>
+                                    <textarea id="agent-update-changelog" placeholder="What's new in this agent build"></textarea>
+                                </div>
+                                <div id="agent-update-status" class="command-status"></div>
+                            </div>
+
+                            <div class="learning-card">
+                                <div class="commands-list-header" style="margin-bottom:10px;">
+                                    <h4>Published Versions</h4>
+                                    <button id="refresh-agent-versions" class="ghost-btn" type="button">Refresh</button>
+                                </div>
+                                <div id="agent-versions-empty" class="empty">No published versions yet.</div>
+                                <div id="agent-versions-list" class="commands-table"></div>
+
+                                <div class="commands-list-header" style="margin:16px 0 10px;">
+                                    <h4>Update History</h4>
+                                    <button id="refresh-agent-update-history" class="ghost-btn" type="button">Refresh</button>
+                                </div>
+                                <div id="agent-update-history-empty" class="empty">No self-update history yet.</div>
+                                <div id="agent-update-history-list" class="commands-table"></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="commands-list">
                         <div class="commands-list-header">
@@ -1418,9 +1594,25 @@
     <script id="drives-json" type="application/json">{{.DrivesJSON}}</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-        // Parse disk and drive JSON from script tags
-        const disksData = JSON.parse(document.getElementById('disks-json').textContent || '[]');
-        const drivesData = JSON.parse(document.getElementById('drives-json').textContent || '[]');
+        function parseJSONArrayScriptTag(tagId) {
+            const node = document.getElementById(tagId);
+            if (!node) return [];
+
+            const raw = String(node.textContent || '').trim();
+            if (!raw) return [];
+
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (err) {
+                console.warn('Failed to parse JSON from', tagId, err);
+                return [];
+            }
+        }
+
+        // Parse disk and drive JSON from script tags safely
+        const disksData = parseJSONArrayScriptTag('disks-json');
+        const drivesData = parseJSONArrayScriptTag('drives-json');
         const agentId = "{{.Agent.AgentID}}";
         const agentChatLastSeenStorageKey = 'agentChatLastSeenMessageId:' + agentId;
         let latestAgentMessages = [];
@@ -1433,6 +1625,10 @@
         let latestCommands = [];
         let latestPatchUpdates = [];
         let latestIssues = [];
+        let latestActionRuns = [];
+        let latestToolScores = [];
+        let latestAgentVersions = [];
+        let latestAgentUpdateHistory = [];
 
         const pagination = {
             commands: { page: 1, limit: 10, total: 0 },
@@ -1501,6 +1697,211 @@
             statusEl.className = 'command-status' + (type ? ' ' + type : '');
         }
 
+        function setAgentUpdateStatus(message, type) {
+            const statusEl = document.getElementById('agent-update-status');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = 'command-status' + (type ? ' ' + type : '');
+        }
+
+        function renderAgentVersions(items) {
+            const emptyEl = document.getElementById('agent-versions-empty');
+            const listEl = document.getElementById('agent-versions-list');
+            if (!emptyEl || !listEl) return;
+
+            latestAgentVersions = Array.isArray(items) ? items : [];
+            listEl.innerHTML = '';
+
+            if (latestAgentVersions.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            emptyEl.style.display = 'none';
+            latestAgentVersions.slice(0, 10).forEach((row) => {
+                const status = row && row.is_active ? 'active' : 'inactive';
+                const badgeClass = row && row.is_active ? 'badge-succeeded' : 'badge-dispatched';
+                const item = document.createElement('div');
+                item.className = 'learning-item';
+                item.innerHTML = `
+                    <div class="learning-head">
+                        <div class="learning-key">${escapeHtml(row.version || 'unknown')}</div>
+                        <span class="command-badge ${badgeClass}">${escapeHtml(status)}</span>
+                    </div>
+                    <div class="command-meta">${escapeHtml(row.download_url || '-')}</div>
+                    <div class="command-meta">${escapeHtml(formatTimestamp(row.published_at))}</div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function renderAgentUpdateHistory(items) {
+            const emptyEl = document.getElementById('agent-update-history-empty');
+            const listEl = document.getElementById('agent-update-history-list');
+            if (!emptyEl || !listEl) return;
+
+            latestAgentUpdateHistory = Array.isArray(items) ? items : [];
+            listEl.innerHTML = '';
+
+            if (latestAgentUpdateHistory.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            emptyEl.style.display = 'none';
+            latestAgentUpdateHistory.slice(0, 12).forEach((row) => {
+                const status = String(row.status || 'queued').toLowerCase();
+                const badgeClass = status === 'succeeded' ? 'badge-succeeded' : (status === 'failed' ? 'badge-failed' : (status === 'cancelled' ? 'badge-cancelled' : 'badge-dispatched'));
+                const item = document.createElement('div');
+                item.className = 'learning-item';
+                item.innerHTML = `
+                    <div class="learning-head">
+                        <div class="learning-key">${escapeHtml(row.target_version || 'n/a')}</div>
+                        <span class="command-badge ${badgeClass}">${escapeHtml(status)}</span>
+                    </div>
+                    <div class="command-meta">cmd #${escapeHtml(row.command_id || 'n/a')} • queued ${escapeHtml(formatTimestamp(row.queued_at))}</div>
+                    <div class="command-meta">${escapeHtml((row.error && String(row.error).trim()) || (row.output && String(row.output).trim()) || '')}</div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        async function loadAgentVersions() {
+            const response = await fetch('/api/agent-update/versions', {
+                credentials: 'same-origin',
+            });
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                throw new Error('Agent versions load failed: ' + response.status);
+            }
+            const data = await response.json();
+            renderAgentVersions(data);
+        }
+
+        async function loadAgentUpdateHistory() {
+            const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/agent-update/history', {
+                credentials: 'same-origin',
+            });
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                throw new Error('Agent update history load failed: ' + response.status);
+            }
+            const data = await response.json();
+            renderAgentUpdateHistory(data);
+        }
+
+        async function uploadAgentBinary() {
+            const versionInput = document.getElementById('agent-update-version');
+            const fileInput = document.getElementById('agent-update-file');
+            const downloadUrlInput = document.getElementById('agent-update-download-url');
+            const shaInput = document.getElementById('agent-update-sha256');
+
+            const version = String(versionInput && versionInput.value || '').trim();
+            const file = fileInput && fileInput.files && fileInput.files[0];
+            if (!version) {
+                setAgentUpdateStatus('Version is required for upload.', 'error');
+                return;
+            }
+            if (!file) {
+                setAgentUpdateStatus('Select a binary file to upload.', 'error');
+                return;
+            }
+
+            const form = new FormData();
+            form.append('version', version);
+            form.append('file', file);
+
+            const response = await fetch('/api/agent-update/upload', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: form,
+            });
+
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                const msg = await response.text();
+                throw new Error(msg || ('Upload failed: ' + response.status));
+            }
+
+            const result = await response.json();
+            if (downloadUrlInput) downloadUrlInput.value = String(result.download_url || '');
+            if (shaInput) shaInput.value = String(result.sha256 || '');
+            setAgentUpdateStatus('Upload complete. SHA and download URL populated.', 'ok');
+        }
+
+        async function publishAgentVersion() {
+            const versionInput = document.getElementById('agent-update-version');
+            const downloadUrlInput = document.getElementById('agent-update-download-url');
+            const shaInput = document.getElementById('agent-update-sha256');
+            const changelogInput = document.getElementById('agent-update-changelog');
+
+            const body = {
+                version: String(versionInput && versionInput.value || '').trim(),
+                download_url: String(downloadUrlInput && downloadUrlInput.value || '').trim(),
+                sha256: String(shaInput && shaInput.value || '').trim(),
+                changelog: String(changelogInput && changelogInput.value || '').trim(),
+            };
+
+            if (!body.version || !body.download_url || !body.sha256) {
+                setAgentUpdateStatus('Version, download URL, and SHA256 are required.', 'error');
+                return;
+            }
+
+            const response = await fetch('/api/agent-update/version', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(body),
+            });
+
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                const msg = await response.text();
+                throw new Error(msg || ('Publish failed: ' + response.status));
+            }
+
+            await loadAgentVersions();
+            setAgentUpdateStatus('Version published successfully.', 'ok');
+        }
+
+        async function queueAgentSelfUpdate() {
+            const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/agent-update/install', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ ttl_minutes: 60 }),
+            });
+
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                const msg = await response.text();
+                throw new Error(msg || ('Queue self-update failed: ' + response.status));
+            }
+
+            await loadAgentUpdateHistory();
+            await loadCommands();
+            setAgentUpdateStatus('Agent self-update command queued.', 'ok');
+        }
+
         function setIssuesStatus(message, type) {
             const statusEl = document.getElementById('issues-status');
             if (!statusEl) return;
@@ -1543,11 +1944,15 @@
             await fetch('/admin/logout', { method: 'POST' });
         }
 
+        const DISPLAY_TIMEZONE = {{if .DisplayTimezone}}"{{.DisplayTimezone}}"{{else}}null{{end}};
+
         function formatTimestamp(value) {
             if (!value) return 'n/a';
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return 'n/a';
-            return date.toLocaleString();
+            const opts = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+            if (DISPLAY_TIMEZONE) opts.timeZone = DISPLAY_TIMEZONE;
+            return date.toLocaleString(undefined, opts);
         }
 
         function isChatNearBottom(listEl) {
@@ -1860,7 +2265,7 @@
                 const response = await fetch('/api/chat/messages?scope=agent&agent_id=' + encodeURIComponent(agentId) + '&limit=100', {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -1964,12 +2369,13 @@
                     }),
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
                 if (!response.ok) {
-                    throw new Error('Agent chat send failed: ' + response.status);
+                    const msg = await response.text();
+                    throw new Error((msg && msg.trim()) ? msg.trim() : ('Agent chat send failed: ' + response.status));
                 }
 
                 const created = await response.json();
@@ -2032,10 +2438,55 @@
                 const status = (command.status || 'queued').toLowerCase();
                 badge.className = 'command-badge badge-' + status;
                 badge.textContent = status;
+                const isActive = status === 'queued' || status === 'dispatched' || status === 'running';
+                if (isActive) {
+                    badge.title = 'Requeue appears after completion (succeeded/failed/cancelled).';
+                }
 
                 header.appendChild(left);
+                if (status === 'queued' || !isActive) {
+                    const actions = document.createElement('div');
+                    actions.className = 'command-actions';
+
+                    if (status === 'queued') {
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.className = 'cancel-command-btn';
+                        cancelBtn.textContent = 'Cancel';
+                        cancelBtn.type = 'button';
+                        cancelBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Cancel command #${command.id} (${command.command_type})?`)) {
+                                cancelCommand(command.id);
+                            }
+                        };
+                        actions.appendChild(cancelBtn);
+                    }
+
+                    if (!isActive) {
+                        const requeueBtn = document.createElement('button');
+                        requeueBtn.className = 'requeue-command-btn';
+                        requeueBtn.textContent = 'Requeue';
+                        requeueBtn.type = 'button';
+                        requeueBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Requeue command #${command.id} (${command.command_type})?`)) {
+                                requeueCommand(command.id);
+                            }
+                        };
+                        actions.appendChild(requeueBtn);
+                    }
+
+                    header.appendChild(actions);
+                }
                 header.appendChild(badge);
                 card.appendChild(header);
+
+                if (status === 'dispatched' || status === 'running') {
+                    const hint = document.createElement('div');
+                    hint.className = 'command-meta';
+                    hint.textContent = 'Requeue is available after this command completes.';
+                    card.appendChild(hint);
+                }
 
                 if (command.payload) {
                     const payload = document.createElement('div');
@@ -2069,7 +2520,7 @@
                     credentials: 'same-origin',
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2082,6 +2533,162 @@
                 setCommandStatus('Commands refreshed.', 'ok');
             } catch (err) {
                 setCommandStatus(err.message || 'Failed to load commands.', 'error');
+            }
+        }
+
+        async function cancelCommand(commandId) {
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/commands/' + encodeURIComponent(String(commandId)) + '/cancel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Cancel command failed: ' + response.status));
+                }
+
+                setCommandStatus('Command #' + commandId + ' cancelled successfully.', 'ok');
+                await loadCommands();
+            } catch (err) {
+                setCommandStatus(err.message || 'Failed to cancel command.', 'error');
+            }
+        }
+
+        async function requeueCommand(commandId) {
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/commands/' + encodeURIComponent(String(commandId)) + '/requeue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error(msg || ('Requeue command failed: ' + response.status));
+                }
+
+                const created = await response.json();
+                setCommandStatus('Command #' + commandId + ' requeued as #' + created.id + '.', 'ok');
+                await loadCommands();
+            } catch (err) {
+                setCommandStatus(err.message || 'Failed to requeue command.', 'error');
+            }
+        }
+
+        function renderToolScores(items) {
+            const emptyEl = document.getElementById('tool-scores-empty');
+            const listEl = document.getElementById('tool-scores-list');
+            if (!emptyEl || !listEl) return;
+
+            latestToolScores = Array.isArray(items) ? items : [];
+            listEl.innerHTML = '';
+
+            if (latestToolScores.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            emptyEl.style.display = 'none';
+            latestToolScores.forEach((row) => {
+                const scoreValue = Number(row && row.score);
+                const scorePct = Number.isFinite(scoreValue) ? Math.round(scoreValue * 100) : 0;
+                const badgeClass = scorePct >= 80 ? 'badge-succeeded' : (scorePct >= 50 ? 'badge-dispatched' : 'badge-failed');
+
+                const item = document.createElement('div');
+                item.className = 'learning-item';
+                item.innerHTML = `
+                    <div class="learning-head">
+                        <div class="learning-key">${escapeHtml(row.tool_key || 'unknown')}</div>
+                        <span class="command-badge ${badgeClass}">${scorePct}%</span>
+                    </div>
+                    <div class="command-meta">attempts ${Number(row.attempts || 0)} • success ${Number(row.successes || 0)} • failure ${Number(row.failures || 0)}</div>
+                    <div class="command-meta">last: ${escapeHtml(row.last_status || 'n/a')} • ${escapeHtml(formatTimestamp(row.updated_at))}</div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function renderActionRuns(items) {
+            const emptyEl = document.getElementById('action-runs-empty');
+            const listEl = document.getElementById('action-runs-list');
+            if (!emptyEl || !listEl) return;
+
+            latestActionRuns = Array.isArray(items) ? items : [];
+            listEl.innerHTML = '';
+
+            if (latestActionRuns.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            emptyEl.style.display = 'none';
+            latestActionRuns.forEach((row) => {
+                const status = String(row.status || '').toLowerCase();
+                const badgeClass = status === 'succeeded' ? 'badge-succeeded' : (status === 'failed' ? 'badge-failed' : 'badge-dispatched');
+
+                const item = document.createElement('div');
+                item.className = 'learning-item';
+                item.innerHTML = `
+                    <div class="learning-head">
+                        <div class="learning-key">${escapeHtml(row.tool_key || row.command_type || 'unknown')}</div>
+                        <span class="command-badge ${badgeClass}">${escapeHtml(status || 'n/a')}</span>
+                    </div>
+                    <div class="command-meta">cmd #${escapeHtml(row.command_id || 'n/a')} • latency ${Number(row.latency_ms || 0)}ms</div>
+                    <div class="command-meta">${escapeHtml(formatTimestamp(row.created_at))}</div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        async function loadToolScores() {
+            const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/tool-scores?limit=10', {
+                credentials: 'same-origin',
+            });
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                throw new Error('Tool scores load failed: ' + response.status);
+            }
+            const data = await response.json();
+            renderToolScores(data);
+        }
+
+        async function loadActionRuns() {
+            const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/action-runs?limit=10', {
+                credentials: 'same-origin',
+            });
+            if (response.status === 401) {
+                window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                return;
+            }
+            if (!response.ok) {
+                throw new Error('Action runs load failed: ' + response.status);
+            }
+            const data = await response.json();
+            renderActionRuns(data);
+        }
+
+        async function loadLearningSignals() {
+            try {
+                await Promise.all([loadToolScores(), loadActionRuns()]);
+            } catch (err) {
+                console.warn(err.message || 'Failed to load learning signals');
             }
         }
 
@@ -2115,17 +2722,19 @@
                     }),
                 });
 
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
                 if (!response.ok) {
-                    throw new Error('Command request failed: ' + response.status);
+                    const msg = await response.text();
+                    throw new Error((msg && msg.trim()) ? msg.trim() : ('Command request failed: ' + response.status));
                 }
 
                 setCommandStatus('Command queued successfully.', 'ok');
                 payloadInput.value = '';
                 await loadCommands();
+                await loadLearningSignals();
             } catch (err) {
                 setCommandStatus(err.message || 'Failed to queue command.', 'error');
             }
@@ -2242,7 +2851,7 @@
                 const response = await fetch('/api/agents/' + encodeURIComponent(agentId) + '/patch-updates?' + params.toString(), {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2405,7 +3014,7 @@
                     credentials: 'same-origin',
                     body: JSON.stringify(body),
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2441,7 +3050,7 @@
                     },
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2483,7 +3092,7 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ minutes: Math.floor(minutes) }),
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2518,7 +3127,7 @@
                     },
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2548,7 +3157,7 @@
                 const response = await fetch('/api/issues?' + params.toString(), {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2577,7 +3186,7 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ kb_id: kb, action: action }),
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2611,7 +3220,7 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({ kb_id: kb }),
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2638,7 +3247,7 @@
                     method: 'POST',
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2697,7 +3306,7 @@
                         payload: '',
                     }),
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2742,14 +3351,14 @@
                         next_run_at: runAt,
                     }),
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
                 if (!response.ok) {
                     throw new Error('Schedule reboot failed: ' + response.status);
                 }
-                setPatchStatus('Reboot scheduled successfully at ' + new Date(runAt).toLocaleString() + '.', 'ok');
+                setPatchStatus('Reboot scheduled successfully at ' + formatTimestamp(runAt) + '.', 'ok');
             } catch (err) {
                 setPatchStatus(err.message || 'Failed to schedule reboot.', 'error');
             }
@@ -2838,7 +3447,7 @@
                 const response = await fetch('/api/metrics?agent_id=' + encodeURIComponent(agentId) + '&range=' + encodeURIComponent(selectedRange), {
                     credentials: 'same-origin',
                 });
-                if (response.status === 401 || response.status === 403) {
+                if (response.status === 401) {
                     window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
@@ -2879,7 +3488,7 @@
                 fetch('/api/metrics?agent_id=' + encodeURIComponent(agentId) + '&limit=1', {
                     credentials: 'same-origin',
                 }).then((response) => {
-                    if (response.status === 401 || response.status === 403) {
+                    if (response.status === 401) {
                         window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
                         return;
                     }
@@ -2904,6 +3513,12 @@
             const agentChatNewLink = document.getElementById('agent-chat-new-link');
             const agentChatBottomButton = document.getElementById('agent-chat-bottom-btn');
             const commandsLimit = document.getElementById('commands-limit');
+            const refreshLearningButton = document.getElementById('refresh-learning');
+            const queueAgentUpdateButton = document.getElementById('queue-agent-update');
+            const uploadAgentBinaryButton = document.getElementById('upload-agent-binary');
+            const publishAgentVersionButton = document.getElementById('publish-agent-version');
+            const refreshAgentVersionsButton = document.getElementById('refresh-agent-versions');
+            const refreshAgentUpdateHistoryButton = document.getElementById('refresh-agent-update-history');
             const commandsPrev = document.getElementById('commands-prev');
             const commandsNext = document.getElementById('commands-next');
             const installApprovedButton = document.getElementById('install-approved-updates');
@@ -2938,12 +3553,10 @@
             console.log('Physical Disks:', disks);
             console.log('Logical Drives:', drives);
 
-            if ((!disks || disks.length === 0) && (!drives || drives.length === 0)) {
-                container.innerHTML = '<p class="empty">No disk or drive information available.</p>';
-                return;
-            }
-
             let html = '';
+            if ((!disks || disks.length === 0) && (!drives || drives.length === 0)) {
+                html = '<p class="empty">No disk or drive information available.</p>';
+            }
 
             // Render Physical Disks
             if (disks && disks.length > 0) {
@@ -2998,6 +3611,56 @@
                     pagination.commands.limit = Number(commandsLimit.value) || 10;
                     pagination.commands.page = 1;
                     renderCommands(latestCommands);
+                });
+            }
+            if (refreshLearningButton) {
+                refreshLearningButton.addEventListener('click', loadLearningSignals);
+            }
+            if (queueAgentUpdateButton) {
+                queueAgentUpdateButton.addEventListener('click', async () => {
+                    try {
+                        await queueAgentSelfUpdate();
+                    } catch (err) {
+                        setAgentUpdateStatus(err.message || 'Failed to queue agent self-update.', 'error');
+                    }
+                });
+            }
+            if (uploadAgentBinaryButton) {
+                uploadAgentBinaryButton.addEventListener('click', async () => {
+                    try {
+                        await uploadAgentBinary();
+                    } catch (err) {
+                        setAgentUpdateStatus(err.message || 'Failed to upload binary.', 'error');
+                    }
+                });
+            }
+            if (publishAgentVersionButton) {
+                publishAgentVersionButton.addEventListener('click', async () => {
+                    try {
+                        await publishAgentVersion();
+                    } catch (err) {
+                        setAgentUpdateStatus(err.message || 'Failed to publish version.', 'error');
+                    }
+                });
+            }
+            if (refreshAgentVersionsButton) {
+                refreshAgentVersionsButton.addEventListener('click', async () => {
+                    try {
+                        await loadAgentVersions();
+                        setAgentUpdateStatus('Published versions refreshed.', 'ok');
+                    } catch (err) {
+                        setAgentUpdateStatus(err.message || 'Failed to refresh versions.', 'error');
+                    }
+                });
+            }
+            if (refreshAgentUpdateHistoryButton) {
+                refreshAgentUpdateHistoryButton.addEventListener('click', async () => {
+                    try {
+                        await loadAgentUpdateHistory();
+                        setAgentUpdateStatus('Update history refreshed.', 'ok');
+                    } catch (err) {
+                        setAgentUpdateStatus(err.message || 'Failed to refresh update history.', 'error');
+                    }
                 });
             }
             if (commandsPrev) {
@@ -3134,6 +3797,9 @@
             }
 
             loadCommands();
+            loadLearningSignals();
+            loadAgentVersions();
+            loadAgentUpdateHistory();
             loadAgentChat();
             startAgentChatStream();
             loadPatchUpdates();

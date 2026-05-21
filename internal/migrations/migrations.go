@@ -90,6 +90,18 @@ var migrations = []Migration{
 		Name: "019_add_global_chat_session_memory_v2_5_0",
 		Up:   addGlobalChatSessionMemoryV2,
 	},
+	{
+		Name: "020_add_agent_capability_registry_v2_6_0",
+		Up:   addAgentCapabilityRegistryV2,
+	},
+	{
+		Name: "021_add_agent_action_memory_v2_7_0",
+		Up:   addAgentActionMemoryV2,
+	},
+	{
+		Name: "022_create_agent_update_versions_v2_8_0",
+		Up:   createAgentUpdateVersionsV2,
+	},
 }
 
 func RunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -931,6 +943,94 @@ func addGlobalChatSessionMemoryV2(ctx context.Context, db *pgxpool.Pool) error {
 	return err
 }
 
+func addAgentCapabilityRegistryV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	ALTER TABLE agents
+		ADD COLUMN IF NOT EXISTS runtime_type VARCHAR(64),
+		ADD COLUMN IF NOT EXISTS tools_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		ADD COLUMN IF NOT EXISTS capabilities_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		ADD COLUMN IF NOT EXISTS tool_confidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		ADD COLUMN IF NOT EXISTS tool_updated_at TIMESTAMP;
+
+	CREATE INDEX IF NOT EXISTS idx_agents_runtime_type ON agents(runtime_type);
+	CREATE INDEX IF NOT EXISTS idx_agents_tool_updated_at ON agents(tool_updated_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func addAgentActionMemoryV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS agent_action_runs (
+		id BIGSERIAL PRIMARY KEY,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		command_id BIGINT REFERENCES agent_commands(id) ON DELETE SET NULL,
+		command_type VARCHAR(64) NOT NULL,
+		tool_key VARCHAR(128) NOT NULL,
+		status VARCHAR(20) NOT NULL,
+		success BOOLEAN NOT NULL,
+		latency_ms BIGINT NOT NULL DEFAULT 0,
+		output_excerpt TEXT,
+		error_text TEXT,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_action_runs_agent_created ON agent_action_runs(agent_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_agent_action_runs_tool_status ON agent_action_runs(tool_key, status, created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS agent_tool_scores (
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		tool_key VARCHAR(128) NOT NULL,
+		attempts BIGINT NOT NULL DEFAULT 0,
+		successes BIGINT NOT NULL DEFAULT 0,
+		failures BIGINT NOT NULL DEFAULT 0,
+		score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+		last_status VARCHAR(20) NOT NULL DEFAULT '',
+		last_error TEXT NOT NULL DEFAULT '',
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (agent_id, tool_key)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_tool_scores_agent_score ON agent_tool_scores(agent_id, score DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
+func createAgentUpdateVersionsV2(ctx context.Context, db *pgxpool.Pool) error {
+	query := `
+	CREATE TABLE IF NOT EXISTS agent_update_versions (
+		id SERIAL PRIMARY KEY,
+		version VARCHAR(50) NOT NULL UNIQUE,
+		download_url TEXT NOT NULL,
+		sha256 VARCHAR(64) NOT NULL,
+		changelog TEXT NOT NULL DEFAULT '',
+		published_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		published_by VARCHAR(255) NOT NULL DEFAULT '',
+		is_active BOOLEAN NOT NULL DEFAULT TRUE
+	);
+
+	CREATE TABLE IF NOT EXISTS agent_update_installs (
+		id BIGSERIAL PRIMARY KEY,
+		agent_id VARCHAR(255) NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+		command_id BIGINT REFERENCES agent_commands(id) ON DELETE SET NULL,
+		target_version VARCHAR(50) NOT NULL,
+		status VARCHAR(20) NOT NULL DEFAULT 'queued',
+		output TEXT NOT NULL DEFAULT '',
+		error TEXT NOT NULL DEFAULT '',
+		queued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		completed_at TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_update_installs_agent ON agent_update_installs(agent_id, queued_at DESC);
+	`
+
+	_, err := db.Exec(ctx, query)
+	return err
+}
+
 // RecreateAndRunMigrations drops existing migration state and tables then
 // re-applies all migrations from scratch. Use with caution on production.
 func RecreateAndRunMigrations(ctx context.Context, db *pgxpool.Pool) error {
@@ -954,6 +1054,8 @@ func RecreateAndRunMigrations(ctx context.Context, db *pgxpool.Pool) error {
 	DROP TABLE IF EXISTS script_profiles CASCADE;
 	DROP TABLE IF EXISTS group_policies CASCADE;
 	DROP TABLE IF EXISTS agent_categories CASCADE;
+	DROP TABLE IF EXISTS agent_update_installs CASCADE;
+	DROP TABLE IF EXISTS agent_update_versions CASCADE;
 	DROP TABLE IF EXISTS agent_commands CASCADE;
 	DROP TABLE IF EXISTS agents CASCADE;
 	DROP TABLE IF EXISTS schema_migrations CASCADE;

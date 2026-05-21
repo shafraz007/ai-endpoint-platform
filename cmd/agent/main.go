@@ -14,8 +14,11 @@ import (
 	"os/signal"
 	"regexp"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -32,6 +35,12 @@ const maxCommandOutput = 64 * 1024
 const personalChatMemoryMaxTurns = 20
 const pendingCommandTTL = 5 * time.Minute
 
+const (
+	learningExperimentMinAttempts        = 3
+	learningExperimentMaxPercentDelta    = 10
+	learningExperimentMinReliabilityPerc = 70
+)
+
 type personalChatTurn struct {
 	user      string
 	assistant string
@@ -44,31 +53,83 @@ type personalChatCommandProposal struct {
 	CreatedAt   time.Time
 }
 
+type learnedToolScore struct {
+	ToolKey    string
+	Successes  int
+	Attempts   int
+	Percent    int
+	LastStatus string
+	LastError  string
+}
+
+// agentVersion is set by ldflags at compile time: -ldflags "-X main.agentVersion=X.X.X"
+var agentVersion = "1.0.0-dev"
+
 var (
 	personalChatMemoryMu sync.Mutex
 	personalChatMemory   []personalChatTurn
 	pendingCommandMu     sync.Mutex
 	pendingCommand       *personalChatCommandProposal
+	// agentUpdateStaged is set by handleAgentSelfUpdate after a self-update is staged.
+	// The main loop checks this flag after sending the command ACK and exits
+	// cleanly so the Windows scheduled task can replace the binary.
+	agentUpdateStaged                atomic.Bool
+	governanceBlockedCommandPatterns = []struct {
+		pattern *regexp.Regexp
+		reason  string
+	}{
+		{pattern: regexp.MustCompile(`(?i)\brm\s+-rf\s+/`), reason: "destructive root deletion pattern detected"},
+		{pattern: regexp.MustCompile(`(?i)\bdel\s+/(?:s|q|f)\b.*\\\*`), reason: "recursive force delete pattern detected"},
+		{pattern: regexp.MustCompile(`(?i)\bformat\s+[a-z]:`), reason: "disk format pattern detected"},
+		{pattern: regexp.MustCompile(`(?i)\bdiskpart\b`), reason: "disk partitioning command detected"},
+		{pattern: regexp.MustCompile(`(?i)\bbcdedit\b`), reason: "boot configuration edit detected"},
+		{pattern: regexp.MustCompile(`(?i)\breg\s+delete\b`), reason: "registry deletion command detected"},
+	}
 )
 
 func main() {
+	// Set agent version from ldflags
+	agent.SetAgentVersion(agentVersion)
+
 	cfg := config.LoadAgentConfig()
+
+	if tryRunWindowsService(cfg) {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Println("Shutdown signal received")
+		cancel()
+	}()
+
+	if err := runAgent(ctx, cfg); err != nil {
+		log.Fatalf("Agent stopped with error: %v", err)
+	}
+}
+
+func runAgent(ctx context.Context, cfg config.AgentConfig) error {
 	logCloser, err := logging.Setup("agent", cfg.LogDir, cfg.LogToConsole)
 	if err != nil {
-		log.Fatalf("Failed to setup logging: %v", err)
+		return fmt.Errorf("failed to setup logging: %w", err)
 	}
 	defer logCloser.Close()
 
 	releaseSingleton, err := acquireProcessSingleton("ai-endpoint-platform-agent")
 	if err != nil {
-		log.Fatalf("Agent startup blocked: %v", err)
+		return fmt.Errorf("agent startup blocked: %w", err)
 	}
 	defer releaseSingleton()
 
 	// Get system information
 	sysInfo, err := agent.GetSystemInfo()
 	if err != nil {
-		log.Fatalf("Failed to get system info: %v", err)
+		return fmt.Errorf("failed to get system info: %w", err)
 	}
 
 	// Collect OS and security information
@@ -84,13 +145,6 @@ func main() {
 	}
 
 	metricsCollector := agent.NewMetricsCollector()
-
-	// Setup graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	heartbeatTicker := time.NewTicker(cfg.HeartbeatInterval)
 	defer heartbeatTicker.Stop()
@@ -112,17 +166,11 @@ func main() {
 		log.Printf("Command polling disabled: AGENT_JWT_SECRET not set")
 	}
 
-	go func() {
-		<-sigChan
-		log.Println("Shutdown signal received")
-		cancel()
-	}()
-
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Agent stopped")
-			return
+			return nil
 		case <-heartbeatTicker.C:
 			lastLogin, lastReboot := agent.GetLoginAndRebootTimes()
 			sysInfo.LastLogin = lastLogin
@@ -157,6 +205,8 @@ func main() {
 					cachedRebootRequired = rebootRequired
 				}
 			}
+
+			runtimeType, tools, capabilities, toolConfidence := collectAdvertisedCapabilities()
 
 			hb := transport.HeartbeatRequest{
 				AgentID:              sysInfo.AgentID,
@@ -199,6 +249,10 @@ func main() {
 				PatchScanAt:          lastPatchScanAtPtr,
 				RebootRequired:       cachedRebootRequired,
 				PendingUpdates:       cachedPendingUpdates,
+				RuntimeType:          runtimeType,
+				Tools:                tools,
+				Capabilities:         capabilities,
+				ToolConfidence:       toolConfidence,
 			}
 			sendHeartbeatWithRetry(httpClient, cfg, hb)
 		case <-metricsTicker.C:
@@ -361,39 +415,78 @@ func pollAndExecuteCommand(httpClient *http.Client, cfg config.AgentConfig, agen
 		return
 	}
 
-	status, output, errMsg := executeCommand(cmd, cfg, sysInfo, osInfo)
-	ack := transport.CommandAckRequest{
+	// Acknowledge immediately that this command is being executed so the server
+	// can surface in-progress status without waiting for completion.
+	runningAck := transport.CommandAckRequest{
 		CommandID: cmd.ID,
-		Status:    status,
-		Output:    output,
-		Error:     errMsg,
+		Status:    "running",
+	}
+	if err := sendCommandAck(httpClient, cfg.ServerURL, token, runningAck); err != nil {
+		log.Printf("Failed to send running ack for command %d: %v", cmd.ID, err)
 	}
 
-	if err := sendCommandAck(httpClient, cfg.ServerURL, token, ack); err != nil {
-		log.Printf("Failed to ack command: %v", err)
-	}
+	// Execute in the background so the poll loop is never blocked. Long-running
+	// commands (e.g. Windows Update install) can take many minutes; passing
+	// shellTimeout=0 removes the artificial exec deadline for shell-type commands.
+	go func() {
+		status, output, errMsg := executeCommand(cmd, cfg, sysInfo, osInfo, 0)
+
+		// Generate a fresh token — the original may have expired if execution
+		// outlasted the JWT TTL.
+		finalToken, tokenErr := auth.GenerateToken(agentID, "agent", cfg.JWTSecret, cfg.JWTTTL)
+		if tokenErr != nil {
+			log.Printf("Failed to generate token for final ack of command %d: %v", cmd.ID, tokenErr)
+			return
+		}
+
+		finalAck := transport.CommandAckRequest{
+			CommandID: cmd.ID,
+			Status:    status,
+			Output:    output,
+			Error:     errMsg,
+		}
+		if err := sendCommandAck(httpClient, cfg.ServerURL, finalToken, finalAck); err != nil {
+			log.Printf("Failed to send final ack for command %d: %v", cmd.ID, err)
+		}
+
+		// If a self-update was staged, give the ACK a moment to reach the server
+		// then exit cleanly so the Windows SCM stops the service and the scheduled
+		// task can replace the binary.
+		if agentUpdateStaged.Load() {
+			log.Printf("Self-update staged — exiting service process to allow binary replacement")
+			time.Sleep(2 * time.Second)
+			os.Exit(0)
+		}
+	}()
 }
 
-func executeCommand(cmd transport.Command, cfg config.AgentConfig, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) (string, string, string) {
+func executeCommand(cmd transport.Command, cfg config.AgentConfig, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo, shellTimeout time.Duration) (string, string, string) {
 	switch strings.ToLower(cmd.CommandType) {
 	case "ping":
 		return "succeeded", "pong", ""
 	case "echo":
 		return "succeeded", cmd.Payload, ""
 	case "shell":
-		output, err := runShellCommand(cmd.Payload, cfg.CommandTimeout)
+		output, err := runShellCommand(cmd.Payload, shellTimeout)
 		if err != nil {
 			return "failed", output, err.Error()
 		}
 		return "succeeded", output, ""
 	case "cmd":
-		output, err := runCmdCommand(cmd.Payload, cfg.CommandTimeout)
+		output, err := runCmdCommand(cmd.Payload, shellTimeout)
 		if err != nil {
 			return "failed", output, err.Error()
 		}
 		return "succeeded", output, ""
 	case "powershell":
-		output, err := runPowerShellCommand(cmd.Payload, cfg.CommandTimeout)
+		if runtime.GOOS != "windows" {
+			return "failed", "", fmt.Sprintf(
+				"command type 'powershell' is not supported on %s endpoints (kernel: %s); "+
+					"target Windows agents for PowerShell commands, or use command type 'shell' for POSIX-compatible commands",
+				runtime.GOOS, runtime.GOOS,
+			)
+		}
+		output, err := runPowerShellCommand(cmd.Payload, shellTimeout)
 		if err != nil {
 			return "failed", output, err.Error()
 		}
@@ -414,6 +507,8 @@ func executeCommand(cmd transport.Command, cfg config.AgentConfig, sysInfo *agen
 			return "failed", "", err.Error()
 		}
 		return "succeeded", output, ""
+	case "agent_update":
+		return handleAgentSelfUpdate(cmd.Payload, sysInfo.AgentID, sysInfo.AgentVersion, cfg)
 	default:
 		return "failed", "", "unsupported command type"
 	}
@@ -456,7 +551,7 @@ func executeAITask(payload string, cfg config.AgentConfig, sysInfo *agent.System
 				userPrompt = strings.TrimSpace(task.Instruction)
 			}
 
-			if commandResponse, handled := tryHandlePersonalChatCommand(userPrompt, cfg); handled {
+			if commandResponse, handled := tryHandlePersonalChatCommand(userPrompt, task.Instruction, cfg); handled {
 				result.Summary = "Agent response"
 				result.Details = commandResponse
 				appendPersonalChatMemory(userPrompt, commandResponse)
@@ -556,7 +651,7 @@ func executeAITask(payload string, cfg config.AgentConfig, sysInfo *agent.System
 	return string(body), nil
 }
 
-func tryHandlePersonalChatCommand(message string, cfg config.AgentConfig) (string, bool) {
+func tryHandlePersonalChatCommand(message, instructionContext string, cfg config.AgentConfig) (string, bool) {
 	trimmed := strings.TrimSpace(message)
 	if trimmed == "" {
 		return "", false
@@ -577,7 +672,7 @@ func tryHandlePersonalChatCommand(message string, cfg config.AgentConfig) (strin
 		return fmt.Sprintf("I have a pending request to run: %s. Reply with 'confirm' to run it or 'cancel' to skip.", display), true
 	}
 
-	if proposal, ok, errText := buildCommandProposal(trimmed); ok {
+	if proposal, ok, errText := buildCommandProposal(trimmed, instructionContext); ok {
 		if errText != "" {
 			return errText, true
 		}
@@ -592,16 +687,32 @@ func tryHandlePersonalChatCommand(message string, cfg config.AgentConfig) (strin
 func executeProposedCommand(proposal personalChatCommandProposal, cfg config.AgentConfig) (string, bool) {
 	switch proposal.Action {
 	case "execute_command":
+		if err := validateGovernedCommand(proposal.CommandType, proposal.Command); err != nil {
+			return "Command blocked by governance safeguard: " + err.Error(), true
+		}
 		return executeAndFormatCommand(proposal.CommandType, proposal.Command, cfg)
 	default:
 		return "Command execution failed: unsupported command request", true
 	}
 }
 
-func buildCommandProposal(message string) (personalChatCommandProposal, bool, string) {
+func makeGovernedCommandProposal(commandType, command string) (personalChatCommandProposal, bool, string) {
+	if err := validateGovernedCommand(commandType, command); err != nil {
+		return personalChatCommandProposal{}, true, "Command blocked by governance safeguard: " + err.Error()
+	}
+
+	return personalChatCommandProposal{Action: "execute_command", CommandType: commandType, Command: command, CreatedAt: time.Now()}, true, ""
+}
+
+func buildCommandProposal(message, instructionContext string) (personalChatCommandProposal, bool, string) {
 	trimmed := strings.TrimSpace(message)
 	if trimmed == "" {
 		return personalChatCommandProposal{}, false, ""
+	}
+
+	learningSource := strings.TrimSpace(instructionContext)
+	if learningSource == "" {
+		learningSource = trimmed
 	}
 
 	lower := strings.ToLower(trimmed)
@@ -610,7 +721,7 @@ func buildCommandProposal(message string) (personalChatCommandProposal, bool, st
 		if cmd == "" {
 			return personalChatCommandProposal{}, true, "Command execution failed: empty cmd command"
 		}
-		return personalChatCommandProposal{Action: "execute_command", CommandType: "cmd", Command: cmd, CreatedAt: time.Now()}, true, ""
+		return makeGovernedCommandProposal("cmd", cmd)
 	}
 
 	if strings.HasPrefix(lower, "powershell:") {
@@ -618,7 +729,7 @@ func buildCommandProposal(message string) (personalChatCommandProposal, bool, st
 		if cmd == "" {
 			return personalChatCommandProposal{}, true, "Command execution failed: empty powershell command"
 		}
-		return personalChatCommandProposal{Action: "execute_command", CommandType: "powershell", Command: cmd, CreatedAt: time.Now()}, true, ""
+		return makeGovernedCommandProposal("powershell", cmd)
 	}
 
 	if strings.HasPrefix(lower, "shell:") {
@@ -626,10 +737,83 @@ func buildCommandProposal(message string) (personalChatCommandProposal, bool, st
 		if cmd == "" {
 			return personalChatCommandProposal{}, true, "Command execution failed: empty shell command"
 		}
-		return personalChatCommandProposal{Action: "execute_command", CommandType: "shell", Command: cmd, CreatedAt: time.Now()}, true, ""
+		return makeGovernedCommandProposal("shell", cmd)
+	}
+
+	if isExplicitPingCommand(trimmed) {
+		target := detectPingTarget(trimmed)
+		if target == "" {
+			target = "8.8.8.8"
+		}
+
+		if runtime.GOOS == "windows" {
+			preferred := selectPreferredExecutionTool(learningSource, "execution.cmd", "execution.powershell")
+			if strings.EqualFold(preferred, "execution.powershell") {
+				return makeGovernedCommandProposal("powershell", fmt.Sprintf("Test-Connection -Count 4 %s", target))
+			}
+			return makeGovernedCommandProposal("cmd", fmt.Sprintf("ping -n 4 %s", target))
+		}
+
+		return makeGovernedCommandProposal("shell", fmt.Sprintf("ping -c 4 %s", target))
+	}
+
+	if isInstallPendingUpdatesRequest(trimmed) {
+		if runtime.GOOS != "windows" {
+			return personalChatCommandProposal{}, false, ""
+		}
+		return makeGovernedCommandProposal("powershell", buildInstallPendingUpdatesCommand())
+	}
+
+	if strings.Contains(lower, "restart") || strings.Contains(lower, "reboot") {
+		if runtime.GOOS == "windows" {
+			preferred := selectPreferredExecutionTool(learningSource, "execution.cmd", "execution.powershell")
+			if strings.EqualFold(preferred, "execution.powershell") {
+				return makeGovernedCommandProposal("powershell", "Restart-Computer -Force")
+			}
+			return makeGovernedCommandProposal("cmd", "shutdown /r /t 10")
+		}
+
+		return makeGovernedCommandProposal("shell", "sudo shutdown -r +0")
+	}
+
+	if isEventViewerErrorRequest(trimmed) {
+		if runtime.GOOS != "windows" {
+			return personalChatCommandProposal{}, false, ""
+		}
+		return makeGovernedCommandProposal("powershell", "Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=(Get-Date).AddHours(-24)} | Select-Object -First 20 TimeCreated, Id, ProviderName, Message | Format-List")
+	}
+
+	if strings.Contains(lower, "disk") && (strings.Contains(lower, "free") || strings.Contains(lower, "space") || strings.Contains(lower, "usage") || strings.Contains(lower, "drive")) {
+		if runtime.GOOS != "windows" {
+			return personalChatCommandProposal{}, false, ""
+		}
+		return makeGovernedCommandProposal("powershell", "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{Name='UsedGB';Expression={[math]::Round(($_.Used/1GB),2)}},@{Name='FreeGB';Expression={[math]::Round(($_.Free/1GB),2)}},@{Name='FreePct';Expression={if(($_.Used+$_.Free)-gt 0){[math]::Round((($_.Free/($_.Used+$_.Free))*100),1)} else {0}}} | Format-Table -AutoSize")
 	}
 
 	return personalChatCommandProposal{}, false, ""
+}
+
+func validateGovernedCommand(commandType, command string) error {
+	commandType = strings.ToLower(strings.TrimSpace(commandType))
+	command = strings.TrimSpace(command)
+
+	if command == "" {
+		return fmt.Errorf("empty command")
+	}
+	if len(command) > 4096 {
+		return fmt.Errorf("command too long")
+	}
+
+	switch commandType {
+	case "cmd", "powershell", "shell":
+		for _, blocked := range governanceBlockedCommandPatterns {
+			if blocked.pattern.MatchString(command) {
+				return fmt.Errorf("%s", blocked.reason)
+			}
+		}
+	}
+
+	return nil
 }
 
 func isCPUTemperatureRequest(message string) bool {
@@ -732,7 +916,11 @@ func isInstallPendingUpdatesRequest(message string) bool {
 }
 
 func executeInstallPendingUpdates(cfg config.AgentConfig) (string, bool) {
-	command := `$ErrorActionPreference = 'Stop'
+	return executeAndFormatCommand("powershell", buildInstallPendingUpdatesCommand(), cfg)
+}
+
+func buildInstallPendingUpdatesCommand() string {
+	return `$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $session = New-Object -ComObject Microsoft.Update.Session
@@ -767,8 +955,6 @@ for ($i = 0; $i -lt $updates.Count; $i++) {
     $code = $installResult.GetUpdateResult($i).ResultCode
     Write-Output ("- " + $title + " => ResultCode=" + $code)
 }`
-
-	return executeAndFormatCommand("powershell", command, cfg)
 }
 
 func detectPingTarget(message string) string {
@@ -928,7 +1114,10 @@ func generateAIChatResponse(userMessage string, cfg config.AgentConfig, sysInfo 
 	messages := []chatMsg{{Role: "system", Content: cfg.AISystemPrompt}}
 	messages = append(messages, chatMsg{Role: "system", Content: "Respond in a natural human style: brief empathy, clear conclusions, then practical next steps. Keep it concise and avoid robotic phrasing."})
 	messages = append(messages, chatMsg{Role: "system", Content: "Use combined intelligence: (1) AI reasoning, (2) local endpoint data/diagnostics, and (3) prior conversation memory as learning context. Prefer local evidence over assumptions."})
-	messages = append(messages, chatMsg{Role: "system", Content: "If the prompt includes sections like 'Current user message' and 'Conversation memory', answer only the current user message and do not repeat wrapper text. If a requested diagnostic is unavailable, clearly state what could not be collected."})
+	messages = append(messages, chatMsg{Role: "system", Content: "If the prompt includes sections like 'Current user message', 'Learning memory', and 'Conversation memory', answer only the current user message and use the other sections as supporting context without repeating wrapper text. If a requested diagnostic is unavailable, clearly state what could not be collected."})
+	if learningGuidance := buildLearningPreferenceGuidance(userMessage); learningGuidance != "" {
+		messages = append(messages, chatMsg{Role: "system", Content: learningGuidance})
+	}
 	if deviceContext := buildPersonalChatContext(sysInfo, osInfo); deviceContext != "" {
 		messages = append(messages, chatMsg{Role: "system", Content: deviceContext})
 	}
@@ -1204,7 +1393,7 @@ func extractCurrentUserMessage(instruction string) string {
 		return ""
 	}
 
-	currentMarker := regexp.MustCompile(`(?is)current\s+user\s+message\s*:\s*(.*?)\s*conversation\s+memory\s*:`)
+	currentMarker := regexp.MustCompile(`(?is)current\s+user\s+message\s*:\s*(.*?)\s*(learning\s+memory|conversation\s+memory)\s*:`)
 	if matches := currentMarker.FindStringSubmatch(instruction); len(matches) == 2 {
 		value := strings.TrimSpace(matches[1])
 		if value != "" {
@@ -1215,6 +1404,9 @@ func extractCurrentUserMessage(instruction string) string {
 	currentOnly := regexp.MustCompile(`(?is)current\s+user\s+message\s*:\s*(.*)$`)
 	if matches := currentOnly.FindStringSubmatch(instruction); len(matches) == 2 {
 		value := strings.TrimSpace(matches[1])
+		if learningIndex := strings.Index(strings.ToLower(value), "learning memory:"); learningIndex >= 0 {
+			value = strings.TrimSpace(value[:learningIndex])
+		}
 		if memoryIndex := strings.Index(strings.ToLower(value), "conversation memory:"); memoryIndex >= 0 {
 			value = strings.TrimSpace(value[:memoryIndex])
 		}
@@ -1231,6 +1423,261 @@ func extractCurrentUserMessage(instruction string) string {
 	}
 
 	return instruction
+}
+
+func parseLearningToolScores(instruction string) []learnedToolScore {
+	section := strings.TrimSpace(instruction)
+	if section == "" {
+		return nil
+	}
+
+	learningIndex := strings.Index(strings.ToLower(section), "learning memory:")
+	if learningIndex >= 0 {
+		section = strings.TrimSpace(section[learningIndex:])
+	}
+	conversationIndex := strings.Index(strings.ToLower(section), "conversation memory:")
+	if conversationIndex >= 0 {
+		section = strings.TrimSpace(section[:conversationIndex])
+	}
+
+	pattern := regexp.MustCompile(`(?m)^-\s*([a-z0-9._-]+):\s*(\d+)/(\d+)\s+success\s+\((\d+)%\),\s+last\s+([^:\n]+?)(?::\s*(.+))?\s*$`)
+	matches := pattern.FindAllStringSubmatch(section, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	scores := make([]learnedToolScore, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 6 {
+			continue
+		}
+		successes, err1 := strconv.Atoi(strings.TrimSpace(match[2]))
+		attempts, err2 := strconv.Atoi(strings.TrimSpace(match[3]))
+		percent, err3 := strconv.Atoi(strings.TrimSpace(match[4]))
+		if err1 != nil || err2 != nil || err3 != nil {
+			continue
+		}
+
+		score := learnedToolScore{
+			ToolKey:    strings.TrimSpace(match[1]),
+			Successes:  successes,
+			Attempts:   attempts,
+			Percent:    percent,
+			LastStatus: strings.TrimSpace(match[5]),
+		}
+		if len(match) >= 7 {
+			score.LastError = strings.TrimSpace(match[6])
+		}
+		if score.ToolKey != "" {
+			scores = append(scores, score)
+		}
+	}
+
+	return scores
+}
+
+func buildLearningPreferenceGuidance(instruction string) string {
+	scores := parseLearningToolScores(instruction)
+	if len(scores) == 0 {
+		return ""
+	}
+
+	bestExecution := learnedToolScore{}
+	bestExecutionFound := false
+	var cautionTools []learnedToolScore
+
+	for _, score := range scores {
+		if strings.HasPrefix(score.ToolKey, "execution.") {
+			if !bestExecutionFound || score.Percent > bestExecution.Percent || (score.Percent == bestExecution.Percent && score.Attempts > bestExecution.Attempts) {
+				bestExecution = score
+				bestExecutionFound = true
+			}
+		}
+		if score.Percent < 60 || strings.EqualFold(score.LastStatus, "failed") {
+			cautionTools = append(cautionTools, score)
+		}
+	}
+
+	if len(cautionTools) > 1 {
+		sort.Slice(cautionTools, func(i, j int) bool {
+			if cautionTools[i].Percent == cautionTools[j].Percent {
+				return cautionTools[i].Attempts > cautionTools[j].Attempts
+			}
+			return cautionTools[i].Percent < cautionTools[j].Percent
+		})
+	}
+
+	lines := []string{"Use Learning memory actively when proposing commands or tools: favor recently reliable options and mention safer fallbacks when a tool has been failing."}
+	if bestExecutionFound {
+		lines = append(lines, fmt.Sprintf("Prefer %s for new command suggestions when it fits this request (%d/%d success, %d%% reliability, last %s).", bestExecution.ToolKey, bestExecution.Successes, bestExecution.Attempts, bestExecution.Percent, strings.TrimSpace(bestExecution.LastStatus)))
+		for _, score := range scores {
+			if !strings.HasPrefix(score.ToolKey, "execution.") || strings.EqualFold(score.ToolKey, bestExecution.ToolKey) {
+				continue
+			}
+			if score.Attempts > 0 && score.Attempts < learningExperimentMinAttempts && score.Percent >= bestExecution.Percent-learningExperimentMaxPercentDelta && score.Percent >= learningExperimentMinReliabilityPerc {
+				lines = append(lines, fmt.Sprintf("Experiment loop: occasionally test %s in similar requests to improve confidence (%d/%d success).", score.ToolKey, score.Successes, score.Attempts))
+				break
+			}
+		}
+	}
+
+	maxCautions := 2
+	for _, score := range cautionTools {
+		if maxCautions == 0 {
+			break
+		}
+		line := fmt.Sprintf("Be cautious with %s (%d/%d success, %d%% reliability, last %s).", score.ToolKey, score.Successes, score.Attempts, score.Percent, strings.TrimSpace(score.LastStatus))
+		if score.LastError != "" {
+			line += " Recent failure: " + score.LastError + "."
+		}
+		lines = append(lines, line)
+		maxCautions--
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func resolvePersonalChatUserMessage(message string) string {
+	resolved := strings.TrimSpace(extractCurrentUserMessage(message))
+	if resolved != "" {
+		return resolved
+	}
+	return strings.TrimSpace(message)
+}
+
+func findLearnedToolScore(instruction, toolKey string) (learnedToolScore, bool) {
+	for _, score := range parseLearningToolScores(instruction) {
+		if strings.EqualFold(strings.TrimSpace(score.ToolKey), strings.TrimSpace(toolKey)) {
+			return score, true
+		}
+	}
+	return learnedToolScore{}, false
+}
+
+func selectPreferredExecutionTool(instruction string, allowed ...string) string {
+	selected, _ := selectPreferredExecutionToolWithFeedback(instruction, allowed...)
+	return selected
+}
+
+func selectPreferredExecutionToolWithFeedback(instruction string, allowed ...string) (string, string) {
+	if len(allowed) == 0 {
+		return "", ""
+	}
+
+	type scoredTool struct {
+		tool  string
+		score learnedToolScore
+	}
+
+	scored := make([]scoredTool, 0, len(allowed))
+	for _, toolKey := range allowed {
+		score, ok := findLearnedToolScore(instruction, toolKey)
+		if !ok {
+			continue
+		}
+		scored = append(scored, scoredTool{tool: toolKey, score: score})
+	}
+
+	if len(scored) == 0 {
+		return allowed[0], ""
+	}
+
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score.Percent == scored[j].score.Percent {
+			return scored[i].score.Attempts > scored[j].score.Attempts
+		}
+		return scored[i].score.Percent > scored[j].score.Percent
+	})
+
+	best := scored[0]
+	if len(scored) == 1 {
+		return best.tool, ""
+	}
+
+	for _, candidate := range scored[1:] {
+		if candidate.score.Attempts >= learningExperimentMinAttempts {
+			continue
+		}
+		if candidate.score.Percent < learningExperimentMinReliabilityPerc {
+			continue
+		}
+		if candidate.score.Percent < best.score.Percent-learningExperimentMaxPercentDelta {
+			continue
+		}
+		if best.score.Attempts < learningExperimentMinAttempts && !strings.EqualFold(strings.TrimSpace(best.score.LastStatus), "failed") {
+			continue
+		}
+
+		note := fmt.Sprintf(" Learning experiment: trying %s to increase confidence (%d/%d so far) while keeping %s as fallback.", executionToolLabel(candidate.tool), candidate.score.Successes, candidate.score.Attempts, executionToolLabel(best.tool))
+		return candidate.tool, note
+	}
+
+	return best.tool, ""
+}
+
+func executionToolCommandPrefix(toolKey string) string {
+	switch strings.ToLower(strings.TrimSpace(toolKey)) {
+	case "execution.powershell":
+		return "powershell"
+	case "execution.cmd":
+		return "cmd"
+	case "execution.shell":
+		return "shell"
+	default:
+		return ""
+	}
+}
+
+func executionToolLabel(toolKey string) string {
+	switch strings.ToLower(strings.TrimSpace(toolKey)) {
+	case "execution.powershell":
+		return "PowerShell"
+	case "execution.cmd":
+		return "cmd"
+	case "execution.shell":
+		return "shell"
+	default:
+		return strings.TrimSpace(toolKey)
+	}
+}
+
+func buildExecutionPreferenceReason(instruction, preferredTool, defaultTool string) string {
+	preferredTool = strings.TrimSpace(preferredTool)
+	defaultTool = strings.TrimSpace(defaultTool)
+	if preferredTool == "" || defaultTool == "" || strings.EqualFold(preferredTool, defaultTool) {
+		return ""
+	}
+
+	preferred, preferredOK := findLearnedToolScore(instruction, preferredTool)
+	defaultScore, defaultOK := findLearnedToolScore(instruction, defaultTool)
+	if !preferredOK || !defaultOK {
+		return ""
+	}
+
+	if preferred.Percent > defaultScore.Percent || strings.EqualFold(defaultScore.LastStatus, "failed") {
+		return fmt.Sprintf(" Learning note: preferring %s because it has been more reliable on this agent than %s.", executionToolLabel(preferredTool), executionToolLabel(defaultTool))
+	}
+
+	return ""
+}
+
+func buildExecutionReliabilityNote(instruction, toolKey, fallbackTool string) string {
+	score, ok := findLearnedToolScore(instruction, toolKey)
+	if !ok {
+		return ""
+	}
+	if score.Percent >= 60 && !strings.EqualFold(score.LastStatus, "failed") {
+		return ""
+	}
+
+	note := fmt.Sprintf(" Learning note: %s reliability is %d%% (%d/%d), last %s.", executionToolLabel(toolKey), score.Percent, score.Successes, score.Attempts, strings.TrimSpace(score.LastStatus))
+	if strings.TrimSpace(score.LastError) != "" {
+		note += " Recent failure: " + strings.TrimSpace(score.LastError) + "."
+	}
+	if fallbackPrefix := executionToolCommandPrefix(fallbackTool); fallbackPrefix != "" && !strings.EqualFold(toolKey, fallbackTool) {
+		note += fmt.Sprintf(" If it fails again, try `%s:` instead.", fallbackPrefix)
+	}
+	return note
 }
 
 func truncateMemoryText(value string, max int) string {
@@ -1280,9 +1727,18 @@ func buildFallbackTaskDetails(instruction string, sysInfo *agent.SystemInfo, osI
 }
 
 func buildPersonalChatFallbackReply(message string, sysInfo *agent.SystemInfo, osInfo *agent.OSInfo) string {
-	_ = message
-	_ = sysInfo
-	_ = osInfo
+	currentMessage := resolvePersonalChatUserMessage(message)
+	if analysis, ok := buildTechnicianAnalysisFromMemory(currentMessage); ok {
+		return analysis
+	}
+	if suggestion, ok := buildTechnicianActionSuggestion(message); ok {
+		return suggestion
+	}
+	if (sysInfo != nil || osInfo != nil) && isDeviceHealthRequest(currentMessage) {
+		if snapshot := strings.TrimSpace(buildFallbackTaskDetails(currentMessage, sysInfo, osInfo)); snapshot != "" && snapshot != strings.TrimSpace(currentMessage) {
+			return snapshot
+		}
+	}
 	return "AI response is temporarily unavailable. Please try again in a moment."
 }
 
@@ -1424,37 +1880,77 @@ func explainCommandFailureFromOutput(assistant string) (string, bool) {
 }
 
 func buildTechnicianActionSuggestion(message string) (string, bool) {
-	lower := strings.ToLower(strings.TrimSpace(message))
+	currentMessage := resolvePersonalChatUserMessage(message)
+	lower := strings.ToLower(strings.TrimSpace(currentMessage))
 	if lower == "" {
 		return "", false
 	}
 
 	if strings.Contains(lower, "ping") || strings.Contains(lower, "latency") || strings.Contains(lower, "packet loss") || strings.Contains(lower, "reachability") {
-		target := detectPingTarget(message)
+		target := detectPingTarget(currentMessage)
 		if target == "" {
 			target = "8.8.8.8"
 		}
-		return fmt.Sprintf("I can run a connectivity check for you. To execute it, send: `cmd: ping -n 4 %s`\nAfter it runs, I’ll interpret packet loss and latency like a technician.", target), true
+		preferredTool, experimentNote := selectPreferredExecutionToolWithFeedback(message, "execution.cmd", "execution.powershell")
+		command := fmt.Sprintf("cmd: ping -n 4 %s", target)
+		defaultTool := "execution.cmd"
+		fallbackTool := "execution.powershell"
+		if strings.EqualFold(preferredTool, "execution.powershell") {
+			command = fmt.Sprintf("powershell: Test-Connection -Count 4 %s", target)
+			defaultTool = "execution.cmd"
+			fallbackTool = "execution.cmd"
+		}
+		if runtime.GOOS != "windows" {
+			preferredTool = selectPreferredExecutionTool(message, "execution.shell")
+			command = fmt.Sprintf("shell: ping -c 4 %s", target)
+			defaultTool = "execution.shell"
+			fallbackTool = ""
+			experimentNote = ""
+		}
+		reason := buildExecutionPreferenceReason(message, preferredTool, defaultTool)
+		note := buildExecutionReliabilityNote(message, preferredTool, fallbackTool)
+		return fmt.Sprintf("I can run a connectivity check for you. To execute it, send: `%s`\nAfter it runs, I’ll interpret packet loss and latency like a technician.%s%s%s", command, reason, note, experimentNote), true
 	}
 
-	if isCPUTemperatureRequest(message) {
-		return "I can check CPU temperature sensors. To execute it, send: `powershell: Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature`\nThen I’ll help interpret whether the readings look normal.", true
+	if isCPUTemperatureRequest(currentMessage) {
+		note := buildExecutionReliabilityNote(message, "execution.powershell", "execution.cmd")
+		return "I can check CPU temperature sensors. To execute it, send: `powershell: Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature`\nThen I’ll help interpret whether the readings look normal." + note, true
 	}
 
-	if isEventViewerErrorRequest(message) {
-		return "I can check recent Event Viewer errors. To execute it, send: `powershell: Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=(Get-Date).AddHours(-24)} | Select-Object -First 20 TimeCreated, Id, ProviderName, Message | Format-List`\nAfter it runs, I’ll summarize the likely root causes and next fixes.", true
+	if isEventViewerErrorRequest(currentMessage) {
+		note := buildExecutionReliabilityNote(message, "execution.powershell", "execution.cmd")
+		return "I can check recent Event Viewer errors. To execute it, send: `powershell: Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=(Get-Date).AddHours(-24)} | Select-Object -First 20 TimeCreated, Id, ProviderName, Message | Format-List`\nAfter it runs, I’ll summarize the likely root causes and next fixes." + note, true
 	}
 
 	if strings.Contains(lower, "install") && strings.Contains(lower, "update") {
-		return "I can guide a Windows update install, but it can require reboot. If you want to proceed, send an explicit command starting with `powershell:` and I’ll walk through it step-by-step.", true
+		note := buildExecutionReliabilityNote(message, "execution.powershell", "execution.cmd")
+		return "I can guide a Windows update install, but it can require reboot. If you want to proceed, send an explicit command starting with `powershell:` and I’ll walk through it step-by-step." + note, true
 	}
 
 	if strings.Contains(lower, "restart") || strings.Contains(lower, "reboot") {
-		return "I can help restart this device safely. If you want to run it, send: `cmd: shutdown /r /t 10`\nI can also help check pending user sessions first.", true
+		preferredTool, experimentNote := selectPreferredExecutionToolWithFeedback(message, "execution.cmd", "execution.powershell")
+		command := "cmd: shutdown /r /t 10"
+		defaultTool := "execution.cmd"
+		fallbackTool := "execution.powershell"
+		if strings.EqualFold(preferredTool, "execution.powershell") {
+			command = "powershell: Restart-Computer -Force"
+			fallbackTool = "execution.cmd"
+		}
+		if runtime.GOOS != "windows" {
+			preferredTool = selectPreferredExecutionTool(message, "execution.shell")
+			command = "shell: sudo shutdown -r +0"
+			defaultTool = "execution.shell"
+			fallbackTool = ""
+			experimentNote = ""
+		}
+		reason := buildExecutionPreferenceReason(message, preferredTool, defaultTool)
+		note := buildExecutionReliabilityNote(message, preferredTool, fallbackTool)
+		return fmt.Sprintf("I can help restart this device safely. If you want to run it, send: `%s`\nI can also help check pending user sessions first.%s%s%s", command, reason, note, experimentNote), true
 	}
 
 	if strings.Contains(lower, "disk") && (strings.Contains(lower, "free") || strings.Contains(lower, "space") || strings.Contains(lower, "usage") || strings.Contains(lower, "drive")) {
-		return "I can check disk free space for all drives. To execute it, send: `powershell: Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{Name='UsedGB';Expression={[math]::Round(($_.Used/1GB),2)}},@{Name='FreeGB';Expression={[math]::Round(($_.Free/1GB),2)}},@{Name='FreePct';Expression={if(($_.Used+$_.Free)-gt 0){[math]::Round((($_.Free/($_.Used+$_.Free))*100),1)} else {0}}} | Format-Table -AutoSize`\nAfter it runs, I’ll help identify any drives near capacity.", true
+		note := buildExecutionReliabilityNote(message, "execution.powershell", "execution.cmd")
+		return "I can check disk free space for all drives. To execute it, send: `powershell: Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{Name='UsedGB';Expression={[math]::Round(($_.Used/1GB),2)}},@{Name='FreeGB';Expression={[math]::Round(($_.Free/1GB),2)}},@{Name='FreePct';Expression={if(($_.Used+$_.Free)-gt 0){[math]::Round((($_.Free/($_.Used+$_.Free))*100),1)} else {0}}} | Format-Table -AutoSize`\nAfter it runs, I’ll help identify any drives near capacity." + note, true
 	}
 
 	return "", false
@@ -1602,15 +2098,25 @@ func runCmdCommand(command string, timeout time.Duration) (string, error) {
 }
 
 func runPowerShellCommand(command string, timeout time.Duration) (string, error) {
-	if runtime.GOOS == "windows" {
-		return executeThroughShell(timeout, "powershell", "-NoProfile", "-Command", command)
+	if runtime.GOOS != "windows" {
+		return "", fmt.Errorf(
+			"powershell commands are not supported on %s endpoints (kernel: %s); "+
+				"use command type 'shell' for POSIX-compatible commands",
+			runtime.GOOS, runtime.GOOS,
+		)
 	}
-
-	return executeThroughShell(timeout, "pwsh", "-NoProfile", "-Command", command)
+	return executeThroughShell(timeout, "powershell", "-NoProfile", "-Command", command)
 }
 
 func executeThroughShell(timeout time.Duration, executable string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		// timeout == 0 means no deadline — command runs until it exits naturally.
+		ctx, cancel = context.WithCancel(context.Background())
+	}
 	defer cancel()
 
 	execCmd := exec.CommandContext(ctx, executable, args...)
@@ -1638,34 +2144,48 @@ func restartSystem() error {
 	if runtime.GOOS == "windows" {
 		// Windows: shutdown /r /t 10 /c "Restart initiated by agent"
 		cmd := exec.Command("shutdown", "/r", "/t", "10", "/c", "Restart initiated by agent")
-		if err := cmd.Run(); err != nil {
-			return err
+		return cmd.Run()
+	}
+	// Unix/Linux: try shutdown first, then BusyBox/sysvinit fallbacks
+	for _, args := range [][]string{
+		{"shutdown", "-r", "now"},
+		{"/sbin/reboot"},
+		{"reboot"},
+	} {
+		path, err := exec.LookPath(args[0])
+		if err != nil {
+			continue
 		}
-	} else {
-		// Unix/Linux: Use shutdown command
-		cmd := exec.Command("shutdown", "-r", "+1", "Restart initiated by agent")
-		if err := cmd.Run(); err != nil {
-			return err
+		if err := exec.Command(path, args[1:]...).Run(); err == nil {
+			return nil
 		}
 	}
-	return nil
+	return fmt.Errorf("no suitable restart command found in $PATH")
 }
 
 func shutdownSystem() error {
 	if runtime.GOOS == "windows" {
 		// Windows: shutdown /s /t 10 /c "Shutdown initiated by agent"
 		cmd := exec.Command("shutdown", "/s", "/t", "10", "/c", "Shutdown initiated by agent")
-		if err := cmd.Run(); err != nil {
-			return err
+		return cmd.Run()
+	}
+	// Unix/Linux: try shutdown first, then BusyBox/sysvinit fallbacks
+	for _, args := range [][]string{
+		{"shutdown", "-h", "now"},
+		{"/sbin/halt"},
+		{"halt"},
+		{"/sbin/poweroff"},
+		{"poweroff"},
+	} {
+		path, err := exec.LookPath(args[0])
+		if err != nil {
+			continue
 		}
-	} else {
-		// Unix/Linux: Use shutdown command
-		cmd := exec.Command("shutdown", "-h", "+1", "Shutdown initiated by agent")
-		if err := cmd.Run(); err != nil {
-			return err
+		if err := exec.Command(path, args[1:]...).Run(); err == nil {
+			return nil
 		}
 	}
-	return nil
+	return fmt.Errorf("no suitable shutdown command found in $PATH")
 }
 
 func sendCommandAck(httpClient *http.Client, serverURL, token string, ack transport.CommandAckRequest) error {

@@ -17,6 +17,21 @@ type PendingUpdate struct {
 	RebootRequired bool     `json:"reboot_required"`
 }
 
+type AgentToolParameter struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Required    bool   `json:"required"`
+	Description string `json:"description,omitempty"`
+}
+
+type AgentTool struct {
+	Name        string               `json:"name"`
+	Version     string               `json:"version,omitempty"`
+	Kind        string               `json:"kind,omitempty"`
+	Description string               `json:"description,omitempty"`
+	Parameters  []AgentToolParameter `json:"parameters,omitempty"`
+}
+
 // HeartbeatRequest is the full heartbeat payload from agents
 type HeartbeatRequest struct {
 	AgentID      string     `json:"agent_id"`
@@ -49,19 +64,23 @@ type HeartbeatRequest struct {
 	Disks  string `json:"disks,omitempty"`
 	Drives string `json:"drives,omitempty"`
 	// OS Information
-	OSEdition         string          `json:"os_edition,omitempty"`
-	OSVersion         string          `json:"os_version,omitempty"`
-	OSBuild           string          `json:"os_build,omitempty"`
-	Windows11Eligible string          `json:"windows_11_eligible,omitempty"`
-	TLS12Compatible   bool            `json:"tls_12_compatible,omitempty"`
-	DotNetVersion     string          `json:"dotnet_version,omitempty"`
-	OfficeVersion     string          `json:"office_version,omitempty"`
-	AntivirusName     string          `json:"antivirus_name,omitempty"`
-	AntiSpywareName   string          `json:"antispyware_name,omitempty"`
-	FirewallName      string          `json:"firewall_name,omitempty"`
-	PatchScanAt       *time.Time      `json:"patch_scan_at,omitempty"`
-	RebootRequired    bool            `json:"reboot_required"`
-	PendingUpdates    []PendingUpdate `json:"pending_updates,omitempty"`
+	OSEdition         string             `json:"os_edition,omitempty"`
+	OSVersion         string             `json:"os_version,omitempty"`
+	OSBuild           string             `json:"os_build,omitempty"`
+	Windows11Eligible string             `json:"windows_11_eligible,omitempty"`
+	TLS12Compatible   bool               `json:"tls_12_compatible,omitempty"`
+	DotNetVersion     string             `json:"dotnet_version,omitempty"`
+	OfficeVersion     string             `json:"office_version,omitempty"`
+	AntivirusName     string             `json:"antivirus_name,omitempty"`
+	AntiSpywareName   string             `json:"antispyware_name,omitempty"`
+	FirewallName      string             `json:"firewall_name,omitempty"`
+	PatchScanAt       *time.Time         `json:"patch_scan_at,omitempty"`
+	RebootRequired    bool               `json:"reboot_required"`
+	PendingUpdates    []PendingUpdate    `json:"pending_updates,omitempty"`
+	RuntimeType       string             `json:"runtime_type,omitempty"`
+	Tools             []AgentTool        `json:"tools,omitempty"`
+	Capabilities      []string           `json:"capabilities,omitempty"`
+	ToolConfidence    map[string]float64 `json:"tool_confidence,omitempty"`
 }
 
 // Command represents a pending command for an agent.
@@ -247,4 +266,36 @@ type IssueActionResult struct {
 	CreatedCommandID  int64  `json:"created_command_id,omitempty"`
 	CreatedScheduleID int64  `json:"created_schedule_id,omitempty"`
 	Message           string `json:"message"`
+}
+
+// AgentUpdateManifest is the signed payload delivered to an agent as the
+// "agent_update" command. The agent verifies the HMAC-SHA256 signature before
+// downloading or staging anything.
+type AgentUpdateManifest struct {
+	Version         string    `json:"version"`
+	AgentID         string    `json:"agent_id"`
+	DownloadURL     string    `json:"download_url"`
+	SHA256          string    `json:"sha256"`
+	Changelog       string    `json:"changelog,omitempty"`
+	IssuedAt        time.Time `json:"issued_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	Signature       string    `json:"signature,omitempty"`
+	SignatureScheme string    `json:"signature_scheme,omitempty"`
+}
+
+// AgentVersionInfo is returned by GET /api/agent-update/version.
+type AgentVersionInfo struct {
+	Version     string    `json:"version"`
+	DownloadURL string    `json:"download_url"`
+	SHA256      string    `json:"sha256"`
+	Changelog   string    `json:"changelog,omitempty"`
+	PublishedAt time.Time `json:"published_at"`
+}
+
+// PublishAgentVersionRequest is the body for PUT /api/agent-update/version.
+type PublishAgentVersionRequest struct {
+	Version     string `json:"version"`
+	DownloadURL string `json:"download_url"`
+	SHA256      string `json:"sha256"`
+	Changelog   string `json:"changelog,omitempty"`
 }

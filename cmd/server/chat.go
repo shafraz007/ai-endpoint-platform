@@ -28,6 +28,9 @@ const (
 	personalChatContextFetchLimit    = 60
 	personalChatRecentTurns          = 10
 	personalChatSummaryLineLimit     = 8
+	personalChatLearningScoreLimit   = 4
+	personalChatFleetLearningLimit   = 3
+	personalChatLearningRunLimit     = 4
 	personalChatInstructionMaxChars  = 4000
 	globalChatLearningWindow         = 60
 	globalSessionTitleMinUserTurns   = 3
@@ -1734,17 +1737,17 @@ func tryShadowPublishAgentChatTask(ctx context.Context, cfg config.ServerConfig,
 	}
 
 	type shadowPayload struct {
-		Type      string    `json:"type"`
-		Version   int       `json:"version"`
-		MessageID int64     `json:"message_id"`
-		AgentID   string    `json:"agent_id"`
-		SessionID int64     `json:"session_id,omitempty"`
-		Scope     string    `json:"scope"`
-		Attempt   int       `json:"attempt"`
-		MaxAttempts int     `json:"max_attempts"`
-		DedupeKey string    `json:"dedupe_key"`
-		Task      ai.Task   `json:"task"`
-		CreatedAt time.Time `json:"created_at"`
+		Type        string    `json:"type"`
+		Version     int       `json:"version"`
+		MessageID   int64     `json:"message_id"`
+		AgentID     string    `json:"agent_id"`
+		SessionID   int64     `json:"session_id,omitempty"`
+		Scope       string    `json:"scope"`
+		Attempt     int       `json:"attempt"`
+		MaxAttempts int       `json:"max_attempts"`
+		DedupeKey   string    `json:"dedupe_key"`
+		Task        ai.Task   `json:"task"`
+		CreatedAt   time.Time `json:"created_at"`
 	}
 
 	maxAttempts := cfg.QueueAgentChatMaxAttempts
@@ -1758,17 +1761,17 @@ func tryShadowPublishAgentChatTask(ctx context.Context, cfg config.ServerConfig,
 	}
 
 	body, err := json.Marshal(shadowPayload{
-		Type:      "agent_chat_task",
-		Version:   1,
-		MessageID: message.ID,
-		AgentID:   message.AgentID,
-		SessionID: message.SessionID,
-		Scope:     message.Scope,
-		Attempt:   0,
+		Type:        "agent_chat_task",
+		Version:     1,
+		MessageID:   message.ID,
+		AgentID:     message.AgentID,
+		SessionID:   message.SessionID,
+		Scope:       message.Scope,
+		Attempt:     0,
 		MaxAttempts: maxAttempts,
-		DedupeKey: dedupeKey,
-		Task:      task,
-		CreatedAt: time.Now().UTC(),
+		DedupeKey:   dedupeKey,
+		Task:        task,
+		CreatedAt:   time.Now().UTC(),
 	})
 	if err != nil {
 		return fmt.Errorf("shadow payload marshal failed: %w", err)
@@ -1802,6 +1805,36 @@ func buildPersonalChatInstruction(ctx context.Context, agentID, currentMessage s
 
 	if len(messages) == 0 {
 		return currentMessage, nil
+	}
+
+	learningContext := ""
+	var fleetScores []server.FleetToolScore
+	learningScoresCtx, learningScoresCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	scores, scoreErr := server.ListAgentToolScores(learningScoresCtx, agentID, personalChatLearningScoreLimit)
+	learningScoresCancel()
+	if scoreErr != nil {
+		log.Printf("personal chat learning score lookup skipped for agent %s: %v", agentID, scoreErr)
+	} else {
+		if len(scores) < personalChatLearningScoreLimit {
+			fleetScoresCtx, fleetScoresCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			fleet, fleetErr := server.ListFleetToolScores(fleetScoresCtx, agentID, personalChatFleetLearningLimit)
+			fleetScoresCancel()
+			if fleetErr != nil {
+				log.Printf("personal chat fleet learning lookup skipped for agent %s: %v", agentID, fleetErr)
+			} else {
+				fleetScores = fleet
+			}
+		}
+
+		learningRunsCtx, learningRunsCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		runs, runErr := server.ListAgentActionRuns(learningRunsCtx, agentID, personalChatLearningRunLimit)
+		learningRunsCancel()
+		if runErr != nil {
+			log.Printf("personal chat action-run lookup skipped for agent %s: %v", agentID, runErr)
+			learningContext = buildPersonalChatLearningContext(scores, nil, fleetScores)
+		} else {
+			learningContext = buildPersonalChatLearningContext(scores, runs, fleetScores)
+		}
 	}
 
 	older := messages
@@ -1845,6 +1878,10 @@ func buildPersonalChatInstruction(ctx context.Context, agentID, currentMessage s
 	b := &strings.Builder{}
 	b.WriteString("Current user message:\n")
 	b.WriteString(currentMessage)
+	if strings.TrimSpace(learningContext) != "" {
+		b.WriteString("\n\nLearning memory:\n")
+		b.WriteString(learningContext)
+	}
 	b.WriteString("\n\nConversation memory:\n")
 	if strings.TrimSpace(olderSummary) != "" {
 		b.WriteString("Earlier summary:\n")
@@ -1865,6 +1902,128 @@ func buildPersonalChatInstruction(ctx context.Context, agentID, currentMessage s
 	}
 
 	return instruction, nil
+}
+
+func buildPersonalChatLearningContext(scores []server.AgentToolScore, runs []server.AgentActionRun, fleet []server.FleetToolScore) string {
+	parts := make([]string, 0, 2)
+
+	if len(scores) > 0 {
+		lines := make([]string, 0, len(scores)+1)
+		lines = append(lines, "Tool reliability:")
+		for _, score := range scores {
+			label := strings.TrimSpace(score.ToolKey)
+			if label == "" {
+				continue
+			}
+			pct := int(score.Score * 100)
+			line := fmt.Sprintf("- %s: %d/%d success (%d%%), last %s", label, score.Successes, score.Attempts, pct, strings.TrimSpace(score.LastStatus))
+			if errText := strings.TrimSpace(score.LastError); errText != "" && strings.EqualFold(strings.TrimSpace(score.LastStatus), "failed") {
+				line += ": " + truncateText(errText, 80)
+			}
+			lines = append(lines, line)
+		}
+		if len(lines) > 1 {
+			parts = append(parts, strings.Join(lines, "\n"))
+		}
+	}
+
+	if len(fleet) > 0 {
+		localTools := make(map[string]struct{}, len(scores))
+		for _, score := range scores {
+			key := strings.TrimSpace(strings.ToLower(score.ToolKey))
+			if key == "" {
+				continue
+			}
+			localTools[key] = struct{}{}
+		}
+
+		lines := make([]string, 0, len(fleet)+1)
+		lines = append(lines, "Fleet reliability (peer learning):")
+		for _, score := range fleet {
+			label := strings.TrimSpace(score.ToolKey)
+			if label == "" {
+				continue
+			}
+			if _, exists := localTools[strings.ToLower(label)]; exists {
+				continue
+			}
+			pct := int(score.Score * 100)
+			lines = append(lines, fmt.Sprintf("- %s: %d/%d success (%d%%) across %d agent(s)", label, score.Successes, score.Attempts, pct, score.AgentCount))
+		}
+		if len(lines) > 1 {
+			parts = append(parts, strings.Join(lines, "\n"))
+		}
+	}
+
+	if len(runs) > 0 {
+		lines := make([]string, 0, len(runs)+1)
+		lines = append(lines, "Recent action outcomes:")
+		for _, run := range runs {
+			label := strings.TrimSpace(run.ToolKey)
+			if label == "" {
+				label = strings.TrimSpace(run.CommandType)
+			}
+			if label == "" {
+				continue
+			}
+			line := fmt.Sprintf("- %s %s in %dms", label, strings.TrimSpace(run.Status), run.LatencyMS)
+			if strings.EqualFold(strings.TrimSpace(run.Status), "failed") {
+				if errText := strings.TrimSpace(run.ErrorText); errText != "" {
+					line += ": " + truncateText(errText, 80)
+				}
+			}
+			lines = append(lines, line)
+		}
+		if len(lines) > 1 {
+			parts = append(parts, strings.Join(lines, "\n"))
+		}
+	}
+
+	if experiment := buildPersonalChatExperimentContext(scores, runs); strings.TrimSpace(experiment) != "" {
+		parts = append(parts, experiment)
+	}
+
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+func buildPersonalChatExperimentContext(scores []server.AgentToolScore, runs []server.AgentActionRun) string {
+	lines := make([]string, 0, 3)
+
+	for _, score := range scores {
+		tool := strings.TrimSpace(score.ToolKey)
+		if tool == "" {
+			continue
+		}
+		if score.Attempts > 0 && score.Attempts < 3 && score.Score >= 0.6 {
+			lines = append(lines, fmt.Sprintf("- Explore %s on a similar request to improve confidence (%d attempt(s), %d%% success).", tool, score.Attempts, int(score.Score*100)))
+			break
+		}
+	}
+
+	for _, run := range runs {
+		if !strings.EqualFold(strings.TrimSpace(run.Status), "failed") {
+			continue
+		}
+		tool := strings.TrimSpace(run.ToolKey)
+		if tool == "" {
+			tool = strings.TrimSpace(run.CommandType)
+		}
+		if tool == "" {
+			continue
+		}
+		line := fmt.Sprintf("- Feedback: %s recently failed in %dms", tool, run.LatencyMS)
+		if errText := strings.TrimSpace(run.ErrorText); errText != "" {
+			line += ": " + truncateText(errText, 80)
+		}
+		lines = append(lines, line)
+		break
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+
+	return "Experiment feedback loop:\n" + strings.Join(lines, "\n")
 }
 
 func normalizeChatSender(sender string) string {

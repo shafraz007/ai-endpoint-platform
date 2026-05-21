@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,13 +21,74 @@ func agentPatchUpdatesRouter(cfg config.ServerConfig) http.HandlerFunc {
 
 		path := strings.TrimPrefix(r.URL.Path, "/api/agents/")
 		parts := strings.Split(path, "/")
-		if len(parts) < 2 || strings.TrimSpace(parts[0]) == "" || parts[1] != "patch-updates" {
+		if len(parts) == 1 && strings.TrimSpace(parts[0]) != "" && r.Method == http.MethodDelete {
+			handleAgentDelete(w, r, parts[0])
+			return
+		}
+
+		if len(parts) < 2 || strings.TrimSpace(parts[0]) == "" {
 			http.NotFound(w, r)
 			return
 		}
+
 		agentID := strings.TrimSpace(parts[0])
 
+		// Handle commands sub-routes: /api/agents/{agentId}/commands/{commandId}/...
+		if len(parts) >= 2 && parts[1] == "commands" {
+			if len(parts) >= 4 && parts[3] == "cancel" {
+				commandIDStr := strings.TrimSpace(parts[2])
+				commandID, err := strconv.ParseInt(commandIDStr, 10, 64)
+				if err != nil {
+					http.Error(w, "Invalid command_id", http.StatusBadRequest)
+					return
+				}
+				handleCommandCancel(w, r, agentID, commandID, cfg)
+				return
+			}
+			if len(parts) >= 4 && parts[3] == "requeue" {
+				commandIDStr := strings.TrimSpace(parts[2])
+				commandID, err := strconv.ParseInt(commandIDStr, 10, 64)
+				if err != nil {
+					http.Error(w, "Invalid command_id", http.StatusBadRequest)
+					return
+				}
+				handleCommandRequeue(w, r, agentID, commandID, cfg)
+				return
+			}
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Handle other agent routes
+		if parts[1] != "patch-updates" && parts[1] != "action-runs" && parts[1] != "tool-scores" && parts[1] != "agent-update" {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Agent self-update sub-routes: /api/agents/{id}/agent-update/*
+		if parts[1] == "agent-update" {
+			if len(parts) == 3 && parts[2] == "install" && r.Method == http.MethodPost {
+				handleAgentUpdateInstall(w, r, agentID)
+				return
+			}
+			if len(parts) == 3 && parts[2] == "history" && r.Method == http.MethodGet {
+				handleAgentUpdateHistory(w, r, agentID)
+				return
+			}
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
 		if len(parts) == 2 && r.Method == http.MethodGet {
+			if parts[1] == "action-runs" {
+				handleAgentActionRunsList(w, r, agentID)
+				return
+			}
+			if parts[1] == "tool-scores" {
+				handleAgentToolScoresList(w, r, agentID)
+				return
+			}
+
 			handleAgentPatchUpdatesList(w, r, agentID)
 			return
 		}
@@ -50,6 +112,23 @@ func agentPatchUpdatesRouter(cfg config.ServerConfig) http.HandlerFunc {
 	}
 }
 
+func handleAgentDelete(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+
+	deleted, err := server.DeleteAgent(ctx, agentID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !deleted {
+		http.Error(w, "Agent not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func handleAgentPatchUpdatesList(w http.ResponseWriter, r *http.Request, agentID string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -71,6 +150,48 @@ func handleAgentPatchUpdatesList(w http.ResponseWriter, r *http.Request, agentID
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updates)
+}
+
+func handleAgentActionRunsList(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+
+	runs, err := server.ListAgentActionRuns(ctx, agentID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(runs)
+}
+
+func handleAgentToolScoresList(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	limit := 20
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+
+	scores, err := server.ListAgentToolScores(ctx, agentID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(scores)
 }
 
 func handleAgentPatchUpdateAction(w http.ResponseWriter, r *http.Request, cfg config.ServerConfig, agentID string) {

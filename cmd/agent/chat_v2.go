@@ -26,7 +26,7 @@ func executePersonalChatV2(task *ai.Task, cfg config.AgentConfig, sysInfo *agent
 		userPrompt = strings.TrimSpace(task.Instruction)
 	}
 
-	if commandResponse, handled := tryHandlePersonalChatCommand(userPrompt, cfg); handled {
+	if commandResponse, handled := tryHandlePersonalChatCommand(userPrompt, task.Instruction, cfg); handled {
 		result.Details = commandResponse
 		appendPersonalChatMemory(userPrompt, commandResponse)
 		if task.RequiresApproval {
@@ -35,7 +35,12 @@ func executePersonalChatV2(task *ai.Task, cfg config.AgentConfig, sysInfo *agent
 		return marshalChildResult(result)
 	}
 
-	response, aiErr := generateAIChatResponse(userPrompt, cfg, sysInfo, osInfo)
+	aiInput := userPrompt
+	if strings.Contains(task.Instruction, "Conversation memory:") || strings.Contains(task.Instruction, "Learning memory:") {
+		aiInput = task.Instruction
+	}
+
+	response, aiErr := generateAIChatResponse(aiInput, cfg, sysInfo, osInfo)
 	if aiErr != nil {
 		log.Printf("AI chat v2 response failed, using fallback: %v", aiErr)
 		fallbackInput := strings.TrimSpace(userPrompt)

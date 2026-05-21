@@ -2,12 +2,17 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+var ErrPowerCommandBlocked = errors.New("power command blocked by safety guard")
 
 type AgentCommand struct {
 	ID           int64
@@ -30,6 +35,9 @@ func CreateCommand(ctx context.Context, agentID, commandType, payload string) (*
 	if commandType == "" {
 		return nil, fmt.Errorf("commandType is required")
 	}
+	if err := validatePowerCommandTarget(ctx, agentID, commandType); err != nil {
+		return nil, err
+	}
 
 	query := `
 	INSERT INTO agent_commands (agent_id, command_type, payload, status)
@@ -51,6 +59,89 @@ func CreateCommand(ctx context.Context, agentID, commandType, payload string) (*
 	}
 
 	return &cmd, nil
+}
+
+func validatePowerCommandTarget(ctx context.Context, agentID, commandType string) error {
+	if !isPowerCommand(commandType) {
+		return nil
+	}
+	if !powerGuardEnabled() {
+		return nil
+	}
+
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("%w: missing agent id", ErrPowerCommandBlocked)
+	}
+	if isPowerCommandAgentAllowed(agentID) {
+		return nil
+	}
+
+	var hostname string
+	err := DB.QueryRow(ctx, `SELECT COALESCE(hostname, '') FROM agents WHERE agent_id = $1`, agentID).Scan(&hostname)
+	if err != nil {
+		return fmt.Errorf("%w: failed to validate target agent", ErrPowerCommandBlocked)
+	}
+
+	hostname = strings.TrimSpace(hostname)
+	if hostPatternAllowed(hostname) {
+		return nil
+	}
+
+	return fmt.Errorf("%w: agent_id=%s hostname=%s", ErrPowerCommandBlocked, agentID, hostname)
+}
+
+func isPowerCommand(commandType string) bool {
+	switch strings.ToLower(strings.TrimSpace(commandType)) {
+	case "restart", "shutdown":
+		return true
+	default:
+		return false
+	}
+}
+
+func powerGuardEnabled() bool {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv("POWER_COMMAND_GUARD_ENABLED")))
+	if raw == "0" || raw == "false" || raw == "no" || raw == "off" {
+		return false
+	}
+	return true
+}
+
+func isPowerCommandAgentAllowed(agentID string) bool {
+	raw := strings.TrimSpace(os.Getenv("POWER_COMMAND_ALLOWED_AGENT_IDS"))
+	if raw == "" {
+		return false
+	}
+	// Special values "all" or "*" allow every agent.
+	lower := strings.ToLower(raw)
+	if lower == "all" || lower == "*" {
+		return true
+	}
+	for _, part := range strings.Split(raw, ",") {
+		if strings.TrimSpace(part) == agentID {
+			return true
+		}
+	}
+	return false
+}
+
+func hostPatternAllowed(hostname string) bool {
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		return false
+	}
+
+	pattern := strings.TrimSpace(os.Getenv("POWER_COMMAND_ALLOWED_HOSTNAME_REGEX"))
+	if pattern == "" {
+		pattern = `^[a-f0-9]{12}$`
+	}
+
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false
+	}
+	return re.MatchString(hostname)
 }
 
 func CreateAITaskCommandIfNotExists(ctx context.Context, agentID, payload, taskID string) (*AgentCommand, bool, error) {
@@ -176,6 +267,27 @@ func DequeueCommand(ctx context.Context, agentID string) (*AgentCommand, error) 
 	return &cmd, nil
 }
 
+// MarkCommandRunning transitions a command to "running" status without setting
+// completed_at. This is called as soon as an agent picks up and starts executing
+// a command, so the server can surface in-progress state immediately.
+func MarkCommandRunning(ctx context.Context, commandID int64, agentID string) error {
+	if commandID <= 0 {
+		return fmt.Errorf("commandID is required")
+	}
+	if agentID == "" {
+		return fmt.Errorf("agentID is required")
+	}
+
+	query := `
+	UPDATE agent_commands
+	SET status = 'running', updated_at = CURRENT_TIMESTAMP
+	WHERE id = $1 AND agent_id = $2 AND status IN ('queued', 'dispatched')
+	`
+
+	_, err := DB.Exec(ctx, query, commandID, agentID)
+	return err
+}
+
 func AckCommand(ctx context.Context, commandID int64, agentID, status, output, errMsg string) error {
 	if commandID <= 0 {
 		return fmt.Errorf("commandID is required")
@@ -293,4 +405,94 @@ func GetCommandByID(ctx context.Context, commandID int64, agentID string) (*Agen
 	}
 
 	return &cmd, nil
+}
+
+// CancelCommand cancels a queued command.
+// Returns an error if the command is not found, doesn't belong to the agent, or is not in 'queued' status.
+func CancelCommand(ctx context.Context, commandID int64, agentID string) (*AgentCommand, error) {
+	if commandID <= 0 {
+		return nil, fmt.Errorf("commandID is required")
+	}
+	if agentID == "" {
+		return nil, fmt.Errorf("agentID is required")
+	}
+
+	// First, verify the command exists and belongs to the agent
+	cmd, err := GetCommandByID(ctx, commandID, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only allow cancelling queued commands
+	if cmd.Status != "queued" {
+		return nil, fmt.Errorf("cannot cancel command with status '%s' (only 'queued' commands can be cancelled)", cmd.Status)
+	}
+
+	// Update the command status to cancelled
+	query := `
+	UPDATE agent_commands
+	SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+	WHERE id = $1 AND agent_id = $2
+	RETURNING id, schedule_id, agent_id, command_type, payload, status, created_at, dispatched_at, completed_at,
+		COALESCE(output, ''), COALESCE(error, '')
+	`
+
+	var updatedCmd AgentCommand
+	if err := DB.QueryRow(ctx, query, commandID, agentID).Scan(
+		&updatedCmd.ID,
+		&updatedCmd.ScheduleID,
+		&updatedCmd.AgentID,
+		&updatedCmd.CommandType,
+		&updatedCmd.Payload,
+		&updatedCmd.Status,
+		&updatedCmd.CreatedAt,
+		&updatedCmd.DispatchedAt,
+		&updatedCmd.CompletedAt,
+		&updatedCmd.Output,
+		&updatedCmd.Error,
+	); err != nil {
+		return nil, fmt.Errorf("failed to cancel command: %w", err)
+	}
+
+	return &updatedCmd, nil
+}
+
+func canRequeueStatus(status string) bool {
+	status = strings.ToLower(strings.TrimSpace(status))
+	switch status {
+	case "queued", "dispatched", "running":
+		return false
+	default:
+		return true
+	}
+}
+
+// RequeueCommand clones an existing command into a new queued command.
+// Only non-active (historical) commands are eligible for requeue.
+func RequeueCommand(ctx context.Context, commandID int64, agentID string) (*AgentCommand, error) {
+	if commandID <= 0 {
+		return nil, fmt.Errorf("commandID is required")
+	}
+	if agentID == "" {
+		return nil, fmt.Errorf("agentID is required")
+	}
+
+	original, err := GetCommandByID(ctx, commandID, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !canRequeueStatus(original.Status) {
+		return nil, fmt.Errorf(
+			"cannot requeue command with status '%s' (only historical commands can be requeued)",
+			original.Status,
+		)
+	}
+
+	cloned, err := CreateCommand(ctx, original.AgentID, original.CommandType, original.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to requeue command: %w", err)
+	}
+
+	return cloned, nil
 }

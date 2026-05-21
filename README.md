@@ -49,6 +49,7 @@ Armada is a distributed agent-server architecture for comprehensive endpoint mon
 - ✅ Real-time status indicators
 - ✅ Admin login with DB-backed users and session cookies
 - ✅ Commands queue (server → agent) with acknowledgements
+- ✅ Command queue controls for cancel and requeue actions on eligible historical commands
 - ✅ Daily rotating logs for server and agent
 - ✅ Metrics storage and streaming (SSE) for live charts
 - ✅ Global and personal chat with unread notification badges
@@ -59,6 +60,11 @@ Armada is a distributed agent-server architecture for comprehensive endpoint mon
 - ✅ Schedule execution reports and audit trail
 - ✅ Queue-backed agent chat worker (`cmd/chat-worker`) with consumer-group support
 - ✅ Chat task retry + dead-letter handling with configurable max attempts and DLQ subject
+- ✅ Versioned OS patch rollout policy enforcement for signed manifests
+- ✅ Deterministic staged rollout rings with install gating
+- ✅ Rollout health gates + auto rollback of effective active ring
+- ✅ Admin rollout approval controls in Settings and rollout telemetry in Reports
+- ✅ Self-update history reporting tab in Reports with filters by time, status, version, agent, and hostname
 
 ### In Progress
 
@@ -164,6 +170,8 @@ Provider notes:
 
 Use the one-shot installer to run agent as a Windows service (LocalSystem by default) and set machine-level env vars:
 
+`ArmadaAgent` is now the default Windows runtime mode for endpoint deployment. The current `agent.exe` supports native Windows Service Control Manager (SCM) lifecycle and should be run as a service in production.
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
 	-BuildFromSource `
@@ -210,9 +218,13 @@ Optional runtime/AI env vars are also supported via parameters:
 
 Troubleshooting (Windows service):
 - Service fails to start with `Error 1067`: verify `AGENT_JWT_SECRET` and `SERVER_URL` are present at machine scope.
+- Service fails with `7009/7000` (service did not respond in time): reinstall/update using the latest service-capable `agent.exe`, then start from an elevated shell:
+	- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName ArmadaAgent -ServerURL "http://<server>:8070" -AgentJWTSecret "<shared_agent_secret>" -UseLocalSystem`
+	- `Start-Service ArmadaAgent`
 - Service appears running but no heartbeat: verify outbound connectivity to server (`Test-NetConnection <server> -Port 8070`).
 - No logs visible: ensure `LOG_DIR` exists and service account has write access.
 - Service account issue (`Error 1057`/`1069`): reconfigure service credentials or switch to `-UseLocalSystem`.
+- Avoid duplicate host identities: do not run `agent.exe` manually after service install; use `Get-Service ArmadaAgent` for lifecycle operations.
 - Validate service quickly:
 	- `Get-Service ArmadaAgent`
 	- `Get-CimInstance Win32_Process | Where-Object { $_.Name -ieq 'agent.exe' }`
@@ -238,13 +250,35 @@ QUEUE_AGENT_CHAT_SUBJECT=agent.chat.shadow
 QUEUE_AGENT_CHAT_CONSUMER_GROUP=agent-chat-workers
 QUEUE_AGENT_CHAT_MAX_ATTEMPTS=4
 QUEUE_AGENT_CHAT_DLQ_SUBJECT=agent.chat.shadow.dlq
+UPDATE_MANIFEST_SIGNING_KEY=<strong_shared_signing_key>
+UPDATE_ROLLOUT_POLICY_VERSION=1
+UPDATE_ROLLOUT_RING_COUNT=4
+UPDATE_ROLLOUT_ACTIVE_RING=4
+UPDATE_ROLLOUT_RING_SALT=default
+UPDATE_ROLLOUT_HEALTH_GATE_ENABLED=true
+UPDATE_ROLLOUT_HEALTH_WINDOW_MINUTES=180
+UPDATE_ROLLOUT_HEALTH_MIN_SAMPLES=5
+UPDATE_ROLLOUT_HEALTH_MAX_FAILURE_RATE_PCT=40
+UPDATE_ROLLOUT_AUTO_ROLLBACK_ENABLED=true
+UPDATE_ROLLOUT_AUTO_ROLLBACK_RING_STEP=1
+AGENT_UPDATE_DIR=C:/armada-updates
 LOG_DIR=logs
 LOG_TO_CONSOLE=true
 ```
 
+Rollout policy can also be supplied as JSON via `UPDATE_ROLLOUT_POLICY_JSON`; individual `UPDATE_ROLLOUT_*` vars above override defaults.
+
 ### Queue Worker (chat-worker)
 
-Start queue worker for asynchronous personal chat execution:
+Start queue worker for asynchronous personal chat execution.
+
+Docker (recommended):
+
+```bash
+docker compose -f deployments/server/docker-compose.server.yml up -d --build armada-chat-worker
+```
+
+Host/native fallback:
 
 ```bash
 export QUEUE_ENABLED=true
@@ -329,6 +363,8 @@ The server can queue commands for agents. Agents poll for commands and acknowled
 - `GET /session-timeout` - re-authenticate when session expires
 - `POST /api/commands` (admin) - create a command
 - `GET /api/commands?agent_id=...` (admin) - list recent commands
+- `POST /api/agents/{id}/commands/{command_id}/cancel` (admin) - cancel a queued command
+- `POST /api/agents/{id}/commands/{command_id}/requeue` (admin) - clone eligible historical command into queue
 - `GET /api/commands/next` (agent) - poll for next command
 - `POST /api/commands/ack` (agent) - acknowledge execution
 - `POST /api/heartbeat` (agent) - send heartbeat
@@ -342,10 +378,21 @@ The server can queue commands for agents. Agents poll for commands and acknowled
 - `PUT /api/schedules/{id}` (admin) - update a schedule
 - `DELETE /api/schedules/{id}` (admin) - delete a schedule
 - `GET /api/os-patch/policy` (admin) - get merged OS patch policy
-- `POST /api/os-patch/policy` (admin) - save OS patch policy
+- `PUT /api/os-patch/policy` (admin) - save OS patch policy
 - `POST /api/os-patch/policy/reset` (admin) - reset OS patch policy
 - `GET /api/os-patch/policy/audit` (admin) - list OS patch policy audit entries
+- `GET /api/os-patch/rollout-policy` (admin) - get effective rollout policy, health snapshot, and active ring
+- `PUT /api/os-patch/rollout-policy` (admin) - set runtime rollout policy override
+- `POST /api/os-patch/rollout-policy/reset` (admin) - clear runtime rollout policy override
+- `GET /api/agent-update/version` (admin or agent) - get latest published agent version
+- `PUT /api/agent-update/version` (admin) - publish or overwrite agent version metadata
+- `GET /api/agent-update/versions` (admin) - list published agent versions
+- `GET /api/agent-update/download/{version}` (agent) - authenticated binary download (server-hosted mode)
+- `POST /api/agents/{id}/agent-update/install` (admin) - queue signed `agent_update` command
+- `GET /api/agents/{id}/agent-update/history` (admin) - list recent self-update outcomes
 - `GET /api/reports/executions` (admin) - list schedule execution reports
+- `GET /api/reports/self-updates` (admin) - list self-update queue/install history with filters
+- `GET /api/reports/os-patch-rollout?limit=30` (admin) - rollout gate state, ring distribution, and recent install outcomes
 - `GET /api/issues?agent_id=...&status=active|resolved&limit=...` (admin) - list detected issues (alerts)
 - `GET /api/issues/{id}` (admin) - get full issue details and recommended actions
 - `POST /api/issues/{id}/actions` (admin) - execute or schedule remediation action from issue plan
@@ -354,6 +401,13 @@ Metrics history endpoint supports optional filters:
 - `range=10m|1h|4h|12h|24h` (preferred)
 - `since=<RFC3339 timestamp>`
 - `limit=<n>`
+
+### Agent Self-Update Notes
+
+- Current self-update command path targets Windows agents.
+- Run agent as Windows service (`ArmadaAgent`) under elevated account (`LocalSystem` recommended) for unattended binary replacement.
+- Self-update manifests are HMAC-signed using `UPDATE_MANIFEST_SIGNING_KEY` (fallback: `AGENT_JWT_SECRET`) and rejected when expired or tampered.
+- For server-hosted binaries (`/api/agent-update/download/{version}`), set `AGENT_UPDATE_DIR` and place a file named exactly as the target `{version}`.
 
 ## Automated Issue Detection, Remediation, and Protection
 
@@ -629,6 +683,53 @@ Current schema baseline includes:
 New migrations added as needed with automatic execution on startup.
 
 ## Version History
+
+
+## Operations
+
+### Agent Version Update
+
+This section describes how to update agent versions, both manually and via auto-deployment.
+
+#### Manual Update Steps
+
+1. Build or obtain the new agent binary (`agent.exe` for Windows, `agent` for Linux/macOS).
+2. Place the binary in the update directory (e.g., `C:\armada-updates` or `/opt/ai-endpoint-platform/updates`).
+3. Update the manifest and version metadata via server API:
+	- `PUT /api/agent-update/version` (admin)
+	- `GET /api/agent-update/download/{version}` (agent)
+4. Queue the update command for the target agent(s):
+	- `POST /api/agents/{id}/agent-update/install` (admin)
+5. Agent will download, verify, and swap the binary, then restart the service.
+6. Confirm update success:
+	- Check agent logs for version change and restart
+	- Verify agent status in Web UI
+	- Confirm binary hash matches published artifact
+
+#### Auto-Deployment (Self-Update)
+
+1. Publish new agent binary to `AGENT_UPDATE_DIR` on the server.
+2. Ensure rollout policy and health-gate settings are configured:
+	- `UPDATE_ROLLOUT_POLICY_VERSION`, `UPDATE_ROLLOUT_RING_COUNT`, etc.
+3. Use admin API or UI to queue update commands for eligible agents.
+4. Monitor rollout progress in Reports UI and via API endpoints:
+	- `GET /api/agents/{id}/agent-update/history`
+	- `GET /api/reports/self-updates?from=...&to=...&status=...&target_version=...&agent_id=...&hostname=...&limit=...`
+	- `GET /api/reports/os-patch-rollout?limit=30`
+5. If failures occur, health-gate and auto-rollback will protect the fleet.
+
+#### Troubleshooting
+
+- Service fails to start: check environment variables, permissions, and logs.
+- Agent not visible: verify connectivity, logs, and correct binary placement.
+- Duplicate identities: ensure agent runs only as a service, not manual process.
+- For Windows, use `scripts/install-agent-service.ps1` to reinstall service and repair configuration.
+- For Linux/macOS, restart systemd service after binary swap.
+
+#### References
+
+- [RELEASE_NOTES.md](RELEASE_NOTES.md): Latest release summary
+- [RELEASE_PR_NOTE.md](RELEASE_PR_NOTE.md): Detailed rollout notes
 
 ## Release Notes
 

@@ -22,6 +22,7 @@ import (
 )
 
 var agentsTemplate *template.Template
+var agentsManagementTemplate *template.Template
 var detailTemplate *template.Template
 var loginTemplate *template.Template
 var changePasswordTemplate *template.Template
@@ -34,6 +35,11 @@ func init() {
 	agentsTemplate, err = template.ParseFiles("cmd/server/templates/agents.html")
 	if err != nil {
 		log.Printf("Warning: Failed to parse agents template: %v", err)
+	}
+
+	agentsManagementTemplate, err = template.ParseFiles("cmd/server/templates/agents-management.html")
+	if err != nil {
+		log.Printf("Warning: Failed to parse agents-management template: %v", err)
 	}
 
 	detailTemplate, err = template.ParseFiles("cmd/server/templates/agent-detail.html")
@@ -94,6 +100,25 @@ func heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	toolsJSON, err := marshalJSONText(hb.Tools, "[]")
+	if err != nil {
+		log.Printf("heartbeatHandler: failed to marshal tools for %s: %v", hb.AgentID, err)
+		http.Error(w, "Invalid tools payload", http.StatusBadRequest)
+		return
+	}
+	capabilitiesJSON, err := marshalJSONText(hb.Capabilities, "[]")
+	if err != nil {
+		log.Printf("heartbeatHandler: failed to marshal capabilities for %s: %v", hb.AgentID, err)
+		http.Error(w, "Invalid capabilities payload", http.StatusBadRequest)
+		return
+	}
+	toolConfidenceJSON, err := marshalJSONText(hb.ToolConfidence, "{}")
+	if err != nil {
+		log.Printf("heartbeatHandler: failed to marshal tool confidence for %s: %v", hb.AgentID, err)
+		http.Error(w, "Invalid tool confidence payload", http.StatusBadRequest)
+		return
+	}
+
 	err = server.UpsertAgent(
 		hb.AgentID,
 		hb.Hostname,
@@ -132,6 +157,10 @@ func heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 		hb.TLS12Compatible,
 		hb.RebootRequired,
 		hb.PatchScanAt,
+		hb.RuntimeType,
+		toolsJSON,
+		capabilitiesJSON,
+		toolConfidenceJSON,
 	)
 	if err != nil {
 		log.Printf("Database error: %v", err)
@@ -155,7 +184,22 @@ func heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "received"})
 }
 
-func agentsHandler(w http.ResponseWriter, r *http.Request) {
+func marshalJSONText(value interface{}, fallback string) (string, error) {
+	if value == nil {
+		return fallback, nil
+	}
+	body, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" || trimmed == "null" {
+		return fallback, nil
+	}
+	return trimmed, nil
+}
+
+func agentsHandler(w http.ResponseWriter, r *http.Request, cfg config.ServerConfig) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -182,11 +226,12 @@ func agentsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare template data
 	data := map[string]interface{}{
-		"Agents":        agents,
-		"TotalAgents":   len(agents),
-		"OnlineAgents":  onlineCount,
-		"OfflineAgents": offlineCount,
-		"LastUpdated":   time.Now().Format("2006-01-02 15:04:05"),
+		"Agents":          agents,
+		"TotalAgents":     len(agents),
+		"OnlineAgents":    onlineCount,
+		"OfflineAgents":   offlineCount,
+		"LastUpdated":     time.Now().Format("2006-01-02 15:04:05"),
+		"DisplayTimezone": cfg.DisplayTimezone,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -202,17 +247,68 @@ func agentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func agentsManagementHandler(w http.ResponseWriter, r *http.Request, cfg config.ServerConfig) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	agents, err := server.GetAllAgents(ctx)
+	if err != nil {
+		log.Printf("Error fetching agents for management page: %v", err)
+		http.Error(w, "Failed to fetch agents", http.StatusInternalServerError)
+		return
+	}
+
+	onlineCount := 0
+	for _, a := range agents {
+		if a.Status == "online" {
+			onlineCount++
+		}
+	}
+	offlineCount := len(agents) - onlineCount
+
+	data := map[string]interface{}{
+		"Agents":          agents,
+		"TotalAgents":     len(agents),
+		"OnlineAgents":    onlineCount,
+		"OfflineAgents":   offlineCount,
+		"LastUpdated":     time.Now().Format("2006-01-02 15:04:05"),
+		"DisplayTimezone": cfg.DisplayTimezone,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	if agentsManagementTemplate != nil {
+		err = agentsManagementTemplate.Execute(w, data)
+		if err != nil {
+			log.Printf("Error rendering agents-management template: %v", err)
+			http.Error(w, "Template render error", http.StatusInternalServerError)
+		}
+	} else {
+		http.Error(w, "Template not loaded", http.StatusInternalServerError)
+	}
+}
+
 func apiAgentsHandler(cfg config.ServerConfig) http.HandlerFunc {
 	type apiAgent struct {
-		ID        string     `json:"id"`
-		Hostname  string     `json:"hostname"`
-		Status    string     `json:"status"`
-		LastSeen  time.Time  `json:"last_seen"`
-		UpdatedAt time.Time  `json:"updated_at"`
-		Domain    string     `json:"domain,omitempty"`
-		PrivateIP string     `json:"private_ip,omitempty"`
-		PublicIP  string     `json:"public_ip,omitempty"`
-		LastLogin *time.Time `json:"last_login,omitempty"`
+		ID                 string     `json:"id"`
+		Hostname           string     `json:"hostname"`
+		Status             string     `json:"status"`
+		LastSeen           time.Time  `json:"last_seen"`
+		UpdatedAt          time.Time  `json:"updated_at"`
+		Domain             string     `json:"domain,omitempty"`
+		PrivateIP          string     `json:"private_ip,omitempty"`
+		PublicIP           string     `json:"public_ip,omitempty"`
+		LastLogin          *time.Time `json:"last_login,omitempty"`
+		RuntimeType        string     `json:"runtime_type,omitempty"`
+		CapabilitiesJSON   string     `json:"capabilities_json,omitempty"`
+		ToolsJSON          string     `json:"tools_json,omitempty"`
+		ToolConfidenceJSON string     `json:"tool_confidence_json,omitempty"`
+		LearnedScoresJSON  string     `json:"learned_tool_scores_json,omitempty"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -239,15 +335,20 @@ func apiAgentsHandler(cfg config.ServerConfig) http.HandlerFunc {
 		resp := make([]apiAgent, 0, len(agents))
 		for _, item := range agents {
 			resp = append(resp, apiAgent{
-				ID:        item.AgentID,
-				Hostname:  item.Hostname,
-				Status:    item.Status,
-				LastSeen:  item.LastSeen,
-				UpdatedAt: item.UpdatedAt,
-				Domain:    item.Domain,
-				PrivateIP: item.PrivateIP,
-				PublicIP:  item.PublicIP,
-				LastLogin: item.LastLogin,
+				ID:                 item.AgentID,
+				Hostname:           item.Hostname,
+				Status:             item.Status,
+				LastSeen:           item.LastSeen,
+				UpdatedAt:          item.UpdatedAt,
+				Domain:             item.Domain,
+				PrivateIP:          item.PrivateIP,
+				PublicIP:           item.PublicIP,
+				LastLogin:          item.LastLogin,
+				RuntimeType:        item.RuntimeType,
+				CapabilitiesJSON:   item.CapabilitiesJSON,
+				ToolsJSON:          item.ToolsJSON,
+				ToolConfidenceJSON: item.ToolConfidenceJSON,
+				LearnedScoresJSON:  item.LearnedScoresJSON,
 			})
 		}
 
@@ -256,7 +357,7 @@ func apiAgentsHandler(cfg config.ServerConfig) http.HandlerFunc {
 	}
 }
 
-func agentDetailHandler(w http.ResponseWriter, r *http.Request) {
+func agentDetailHandler(w http.ResponseWriter, r *http.Request, cfg config.ServerConfig) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -284,9 +385,10 @@ func agentDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create template data with JSON fields marked as safe (not HTML-escaped)
 	data := map[string]interface{}{
-		"Agent":      agent,
-		"DisksJSON":  template.JS(agent.Disks),
-		"DrivesJSON": template.JS(agent.Drives),
+		"Agent":           agent,
+		"DisksJSON":       template.JS(agent.Disks),
+		"DrivesJSON":      template.JS(agent.Drives),
+		"DisplayTimezone": cfg.DisplayTimezone,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -555,6 +657,9 @@ func main() {
 	mux.HandleFunc("/api/agents", apiAgentsHandler(cfg))
 	mux.HandleFunc("/api/agents/", agentPatchUpdatesRouter(cfg))
 
+	// Agent binary self-update endpoints
+	mux.HandleFunc("/api/agent-update/", agentSelfUpdateRouter(cfg))
+
 	// Governance endpoints (admin only)
 	mux.HandleFunc("/api/categories", categoriesHandler(cfg))
 	mux.HandleFunc("/api/categories/", categoryHandler(cfg))
@@ -575,9 +680,13 @@ func main() {
 	mux.HandleFunc("/api/os-patch/policy", osPatchPolicyHandler(cfg))
 	mux.HandleFunc("/api/os-patch/policy/reset", osPatchPolicyResetHandler(cfg))
 	mux.HandleFunc("/api/os-patch/policy/audit", osPatchPolicyAuditHandler(cfg))
+	mux.HandleFunc("/api/os-patch/rollout-policy", updateRolloutPolicyHandler(cfg))
+	mux.HandleFunc("/api/os-patch/rollout-policy/reset", updateRolloutPolicyResetHandler(cfg))
 	mux.HandleFunc("/api/os-patch/updates", osPatchUpdatesHandler(cfg))
 	mux.HandleFunc("/api/os-patch/updates/actions", osPatchUpdatesActionHandler(cfg))
 	mux.HandleFunc("/api/reports/executions", scheduleExecutionReportsHandler(cfg))
+	mux.HandleFunc("/api/reports/self-updates", selfUpdateHistoryReportsHandler(cfg))
+	mux.HandleFunc("/api/reports/os-patch-rollout", osPatchRolloutTelemetryHandler(cfg))
 	mux.HandleFunc("/api/issues", issuesHandler(cfg))
 	mux.HandleFunc("/api/issues/", issueRouter(cfg))
 	mux.HandleFunc("/api/threshold-profiles", thresholdProfilesHandler(cfg))
@@ -598,7 +707,14 @@ func main() {
 		if _, ok := requireAdminPage(w, r, cfg, false); !ok {
 			return
 		}
-		agentsHandler(w, r)
+		agentsHandler(w, r, cfg)
+	})
+
+	mux.HandleFunc("/agents/manage", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireAdminPage(w, r, cfg, false); !ok {
+			return
+		}
+		agentsManagementHandler(w, r, cfg)
 	})
 
 	// Governance settings page
@@ -614,7 +730,7 @@ func main() {
 		agentID := strings.TrimPrefix(r.URL.Path, "/agents/")
 		log.Printf("Extracted agent ID: %s", agentID)
 		if agentID != "" {
-			agentDetailHandler(w, r)
+			agentDetailHandler(w, r, cfg)
 		} else {
 			log.Printf("Agent ID is empty, returning 404")
 			http.NotFound(w, r)

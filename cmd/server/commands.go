@@ -84,6 +84,10 @@ func handleCommandCreate(w http.ResponseWriter, r *http.Request, cfg config.Serv
 
 	cmd, err := server.CreateCommand(ctx, req.AgentID, req.CommandType, req.Payload)
 	if err != nil {
+		if errors.Is(err, server.ErrPowerCommandBlocked) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 		log.Printf("CreateCommand error: %v", err)
 		http.Error(w, "Failed to create command", http.StatusInternalServerError)
 		return
@@ -342,7 +346,7 @@ func commandAckHandler(cfg config.ServerConfig) http.HandlerFunc {
 		}
 
 		status := strings.ToLower(strings.TrimSpace(req.Status))
-		if status != "succeeded" && status != "failed" {
+		if status != "succeeded" && status != "failed" && status != "running" {
 			http.Error(w, "Invalid status", http.StatusBadRequest)
 			return
 		}
@@ -354,6 +358,16 @@ func commandAckHandler(cfg config.ServerConfig) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
+		// "running" is a progress update — mark the command in-progress and return.
+		// Learning, relay, and completion tracking happen only on the final ACK.
+		if status == "running" {
+			if err := server.MarkCommandRunning(ctx, req.CommandID, agentID); err != nil {
+				log.Printf("MarkCommandRunning error: %v", err)
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		command, commandErr := server.GetCommandByID(ctx, req.CommandID, agentID)
 		if commandErr != nil {
 			log.Printf("GetCommandByID error: %v", commandErr)
@@ -363,6 +377,18 @@ func commandAckHandler(cfg config.ServerConfig) http.HandlerFunc {
 			log.Printf("AckCommand error: %v", err)
 			http.Error(w, "Failed to acknowledge command", http.StatusInternalServerError)
 			return
+		}
+
+		if command != nil {
+			if learnErr := server.RecordActionOutcome(ctx, command, status, req.Output, req.Error); learnErr != nil {
+				log.Printf("RecordActionOutcome error: %v", learnErr)
+			}
+			// Track agent self-update install outcomes
+			if strings.ToLower(strings.TrimSpace(command.CommandType)) == "agent_update" {
+				if recErr := server.RecordAgentUpdateInstallResult(ctx, command.ID, status, req.Output, req.Error); recErr != nil {
+					log.Printf("RecordAgentUpdateInstallResult error: %v", recErr)
+				}
+			}
 		}
 
 		relayAgentReplyToChat(ctx, command, status, req.Output, req.Error)
@@ -469,4 +495,129 @@ func getBearerToken(r *http.Request) (string, error) {
 		return "", errors.New("Invalid Authorization header")
 	}
 	return strings.TrimSpace(parts[1]), nil
+}
+func handleCommandCancel(w http.ResponseWriter, r *http.Request, agentID string, commandID int64, cfg config.ServerConfig) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if cfg.AdminJWTSecret == "" {
+		http.Error(w, "Admin auth not configured", http.StatusInternalServerError)
+		return
+	}
+
+	claims, _, err := authorizeAdminRequest(w, r, cfg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	_ = claims
+
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		http.Error(w, "Missing agent_id", http.StatusBadRequest)
+		return
+	}
+
+	if commandID <= 0 {
+		http.Error(w, "Invalid command_id", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	cmd, err := server.CancelCommand(ctx, commandID, agentID)
+	if err != nil {
+		log.Printf("CancelCommand error: %v", err)
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if strings.Contains(err.Error(), "cannot cancel") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Failed to cancel command", http.StatusInternalServerError)
+		return
+	}
+
+	resp := transport.Command{
+		ID:          cmd.ID,
+		AgentID:     cmd.AgentID,
+		CommandType: cmd.CommandType,
+		Payload:     cmd.Payload,
+		Status:      cmd.Status,
+		CreatedAt:   cmd.CreatedAt,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+func handleCommandRequeue(w http.ResponseWriter, r *http.Request, agentID string, commandID int64, cfg config.ServerConfig) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if cfg.AdminJWTSecret == "" {
+		http.Error(w, "Admin auth not configured", http.StatusInternalServerError)
+		return
+	}
+
+	claims, _, err := authorizeAdminRequest(w, r, cfg)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	_ = claims
+
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		http.Error(w, "Missing agent_id", http.StatusBadRequest)
+		return
+	}
+
+	if commandID <= 0 {
+		http.Error(w, "Invalid command_id", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	cmd, err := server.RequeueCommand(ctx, commandID, agentID)
+	if err != nil {
+		log.Printf("RequeueCommand error: %v", err)
+		if errors.Is(err, server.ErrPowerCommandBlocked) {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if strings.Contains(err.Error(), "cannot requeue") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Failed to requeue command", http.StatusInternalServerError)
+		return
+	}
+
+	resp := transport.Command{
+		ID:          cmd.ID,
+		AgentID:     cmd.AgentID,
+		CommandType: cmd.CommandType,
+		Payload:     cmd.Payload,
+		Status:      cmd.Status,
+		CreatedAt:   cmd.CreatedAt,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 }

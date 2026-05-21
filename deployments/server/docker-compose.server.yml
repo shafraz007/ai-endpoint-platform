@@ -1,0 +1,79 @@
+services:
+  armada-server:
+    build:
+      context: ../..
+      dockerfile: deployments/server/Dockerfile
+    container_name: armada-server
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PUBLISHED_PORT:-18070}:8070"
+    environment:
+      SERVER_PORT: "8070"
+      DATABASE_URL: ${DATABASE_URL:-postgres://aiuser:aipassword@host.docker.internal:5432/aiendpoint?sslmode=disable}
+      AGENT_JWT_SECRET: ${SERVER_AGENT_JWT_SECRET:-armada-test-secret-2024}
+      ADMIN_JWT_SECRET: ${SERVER_ADMIN_JWT_SECRET:-test-secret-admin-jwt}
+      AGENT_UPDATE_DIR: /app/agent-updates
+      LOG_TO_CONSOLE: "true"
+      LOG_DIR: /app/logs
+      QUEUE_ENABLED: "true"
+      QUEUE_PROVIDER: nats
+      NATS_URL: ${QUEUE_NATS_URL:-nats://host.docker.internal:4222}
+      GLOBAL_CHAT_AI_PROVIDER: ${GLOBAL_CHAT_AI_PROVIDER:-ollama}
+      GLOBAL_CHAT_AI_ENDPOINT: ${GLOBAL_CHAT_AI_ENDPOINT:-http://host.docker.internal:11434/v1/chat/completions}
+      GLOBAL_CHAT_AI_MODEL: ${GLOBAL_CHAT_AI_MODEL:-llama3.2}
+      AGENT_JWT_TTL_SECONDS: ${AGENT_JWT_TTL_SECONDS:-86400}
+      POWER_COMMAND_ALLOWED_AGENT_IDS: ${POWER_COMMAND_ALLOWED_AGENT_IDS:-}
+      POWER_COMMAND_ALLOWED_HOSTNAME_REGEX: ${POWER_COMMAND_ALLOWED_HOSTNAME_REGEX:-}
+      POWER_COMMAND_GUARD_ENABLED: ${POWER_COMMAND_GUARD_ENABLED:-true}
+      DISPLAY_TIMEZONE: ${DISPLAY_TIMEZONE:-}
+    volumes:
+      - server_logs:/app/logs
+      - ../../agent-updates:/app/agent-updates
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - armada-shared
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8070/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  armada-chat-worker:
+    build:
+      context: ../..
+      dockerfile: deployments/chat-worker/Dockerfile
+    container_name: armada-chat-worker
+    restart: unless-stopped
+    depends_on:
+      armada-server:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://aiuser:aipassword@host.docker.internal:5432/aiendpoint?sslmode=disable}
+      AGENT_JWT_SECRET: ${SERVER_AGENT_JWT_SECRET:-armada-test-secret-2024}
+      LOG_TO_CONSOLE: "true"
+      LOG_DIR: /app/logs
+      QUEUE_ENABLED: "true"
+      QUEUE_PROVIDER: nats
+      NATS_URL: ${QUEUE_NATS_URL:-nats://host.docker.internal:4222}
+      QUEUE_SUBJECT_PREFIX: ${QUEUE_SUBJECT_PREFIX:-chat}
+      QUEUE_AGENT_CHAT_ACTIVE: "true"
+      QUEUE_AGENT_CHAT_SUBJECT: ${QUEUE_AGENT_CHAT_SUBJECT:-agent.chat.shadow}
+      QUEUE_AGENT_CHAT_CONSUMER_GROUP: ${QUEUE_AGENT_CHAT_CONSUMER_GROUP:-agent-chat-workers}
+      QUEUE_AGENT_CHAT_MAX_ATTEMPTS: ${QUEUE_AGENT_CHAT_MAX_ATTEMPTS:-4}
+      QUEUE_AGENT_CHAT_DLQ_SUBJECT: ${QUEUE_AGENT_CHAT_DLQ_SUBJECT:-agent.chat.shadow.dlq}
+    volumes:
+      - chat_worker_logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - armada-shared
+
+volumes:
+  server_logs:
+  chat_worker_logs:
+
+networks:
+  armada-shared:
+    external: true

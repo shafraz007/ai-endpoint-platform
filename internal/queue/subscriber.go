@@ -12,11 +12,11 @@ import (
 )
 
 type SubscriberConfig struct {
-	Provider string
-	NATSURL  string
-	Subject  string
+	Provider   string
+	NATSURL    string
+	Subject    string
 	QueueGroup string
-	Timeout  time.Duration
+	Timeout    time.Duration
 }
 
 type MessageHandler func(ctx context.Context, subject string, payload []byte) error

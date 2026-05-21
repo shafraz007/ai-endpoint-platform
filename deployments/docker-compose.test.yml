@@ -1,0 +1,54 @@
+services:
+  # Armada Agent #1
+  agent:
+    build:
+      context: ..
+      dockerfile: deployments/agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Point to containerized server by default (same shared Docker network)
+      SERVER_URL: ${SERVER_URL:-http://armada-server:8070}
+      AGENT_JWT_SECRET: armada-test-secret-2024
+      AGENT_AI_PROVIDER: ollama
+      AGENT_AI_ENDPOINT: ${AGENT_AI_ENDPOINT:-http://host.docker.internal:11434/api/chat}
+      AGENT_AI_MODEL: llama3.2
+      LOG_TO_CONSOLE: "true"
+      LOG_DIR: /app/logs
+      HEARTBEAT_INTERVAL_SECONDS: 30
+    volumes:
+      - agent1_logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - armada-shared
+
+  # Armada Agent #2
+  agent2:
+    build:
+      context: ..
+      dockerfile: deployments/agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Point to containerized server by default (same shared Docker network)
+      SERVER_URL: ${SERVER_URL:-http://armada-server:8070}
+      AGENT_JWT_SECRET: armada-test-secret-2024
+      AGENT_AI_PROVIDER: ollama
+      AGENT_AI_ENDPOINT: ${AGENT_AI_ENDPOINT:-http://host.docker.internal:11434/api/chat}
+      AGENT_AI_MODEL: llama3.2
+      LOG_TO_CONSOLE: "true"
+      LOG_DIR: /app/logs
+      HEARTBEAT_INTERVAL_SECONDS: 30
+    volumes:
+      - agent2_logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - armada-shared
+
+volumes:
+  agent1_logs:
+  agent2_logs:
+
+networks:
+  armada-shared:
+    external: true

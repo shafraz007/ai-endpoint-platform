@@ -537,8 +537,60 @@ func QueueInstallApprovedPatchUpdates(ctx context.Context, agentID string) (*Age
 	if err != nil {
 		return nil, 0, "", err
 	}
+	rolloutPolicy, err := ResolveUpdateRolloutPolicy()
+	if err != nil {
+		return nil, 0, "", fmt.Errorf("failed to resolve rollout policy: %w", err)
+	}
+	effectiveActiveRing, _, err := ResolveInstallRolloutEffectiveActiveRing(ctx, rolloutPolicy)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	effectivePolicy := rolloutPolicy
+	effectivePolicy.ActiveRing = effectiveActiveRing
 
-	script := buildInstallApprovedUpdatesScript(approvedIDs, rebootBehavior)
+	agentRing, err := ValidateAgentUpdateRolloutStage(agentID, "install_approved_updates", effectivePolicy)
+	if err != nil {
+		return nil, 0, "", fmt.Errorf("install rollout stage gate: %w", err)
+	}
+	maxTTL, err := rolloutPolicy.manifestTTLForAction("install_approved_updates")
+	if err != nil {
+		return nil, 0, "", err
+	}
+	issuedAt := time.Now().UTC()
+
+	kbIDs := make([]string, 0, len(updates))
+	for _, item := range updates {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(item.ApprovalState)), "approved") {
+			if kb := strings.ToUpper(strings.TrimSpace(item.KBID)); kb != "" {
+				kbIDs = append(kbIDs, kb)
+			}
+		}
+	}
+
+	manifest, err := BuildSignedUpdateManifest(UpdateCommandManifest{
+		Version:        rolloutPolicy.DefaultManifestVersion,
+		PolicyVersion:  rolloutPolicy.PolicyVersion,
+		RolloutRing:    agentRing,
+		Action:         "install_approved_updates",
+		AgentID:        agentID,
+		UpdateIDs:      approvedIDs,
+		KBIDs:          kbIDs,
+		RebootBehavior: rebootBehavior,
+		IssuedAt:       issuedAt,
+		ExpiresAt:      issuedAt.Add(maxTTL),
+		IssuedBy:       "server.patch_updates",
+	})
+	if err != nil {
+		return nil, 0, "", fmt.Errorf("failed to sign update manifest: %w", err)
+	}
+	if err := ValidateUpdateManifestAgainstRolloutPolicy(manifest, effectivePolicy); err != nil {
+		return nil, 0, "", fmt.Errorf("manifest rejected by rollout policy: %w", err)
+	}
+	if err := VerifySignedUpdateManifest(manifest); err != nil {
+		return nil, 0, "", fmt.Errorf("failed to verify update manifest: %w", err)
+	}
+
+	script := buildInstallApprovedUpdatesScript(approvedIDs, rebootBehavior, manifest)
 	cmd, err := CreateCommand(ctx, agentID, "powershell", script)
 	if err != nil {
 		return nil, 0, "", err
@@ -558,10 +610,10 @@ func QueueUninstallPatchUpdateByKB(ctx context.Context, agentID, kbID string) (*
 	}
 
 	var (
-		title      string
-		isDriver   bool
-		installed  bool
-		updateID   string
+		title     string
+		isDriver  bool
+		installed bool
+		updateID  string
 	)
 	err := DB.QueryRow(ctx, `
 		SELECT COALESCE(title, ''), is_driver, installed, update_id
@@ -584,8 +636,43 @@ func QueueUninstallPatchUpdateByKB(ctx context.Context, agentID, kbID string) (*
 	if isDriver {
 		return nil, fmt.Errorf("driver update %s is not uninstallable from this workflow", kbID)
 	}
+	rolloutPolicy, err := ResolveUpdateRolloutPolicy()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve rollout policy: %w", err)
+	}
+	agentRing, err := ValidateAgentUpdateRolloutStage(agentID, "uninstall_patch_kb", rolloutPolicy)
+	if err != nil {
+		return nil, fmt.Errorf("uninstall rollout stage gate: %w", err)
+	}
+	maxTTL, err := rolloutPolicy.manifestTTLForAction("uninstall_patch_kb")
+	if err != nil {
+		return nil, err
+	}
+	issuedAt := time.Now().UTC()
 
-	script := buildUninstallPatchByKBScript(kbID)
+	manifest, err := BuildSignedUpdateManifest(UpdateCommandManifest{
+		Version:       rolloutPolicy.DefaultManifestVersion,
+		PolicyVersion: rolloutPolicy.PolicyVersion,
+		RolloutRing:   agentRing,
+		Action:        "uninstall_patch_kb",
+		AgentID:       agentID,
+		UpdateIDs:     []string{strings.TrimSpace(updateID)},
+		KBIDs:         []string{kbID},
+		IssuedAt:      issuedAt,
+		ExpiresAt:     issuedAt.Add(maxTTL),
+		IssuedBy:      "server.patch_updates",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign uninstall manifest: %w", err)
+	}
+	if err := ValidateUpdateManifestAgainstRolloutPolicy(manifest, rolloutPolicy); err != nil {
+		return nil, fmt.Errorf("manifest rejected by rollout policy: %w", err)
+	}
+	if err := VerifySignedUpdateManifest(manifest); err != nil {
+		return nil, fmt.Errorf("failed to verify uninstall manifest: %w", err)
+	}
+
+	script := buildUninstallPatchByKBScript(kbID, manifest)
 	cmd, err := CreateCommand(ctx, agentID, "powershell", script)
 	if err != nil {
 		return nil, err
@@ -623,7 +710,7 @@ func resolveAgentPatchRebootBehavior(ctx context.Context, agentID string) (strin
 	}
 }
 
-func buildInstallApprovedUpdatesScript(approvedUpdateIDs []string, rebootBehavior string) string {
+func buildInstallApprovedUpdatesScript(approvedUpdateIDs []string, rebootBehavior string, manifest UpdateCommandManifest) string {
 	quotedIDs := make([]string, 0, len(approvedUpdateIDs))
 	for _, id := range approvedUpdateIDs {
 		trimmed := strings.TrimSpace(id)
@@ -637,14 +724,26 @@ func buildInstallApprovedUpdatesScript(approvedUpdateIDs []string, rebootBehavio
 		return "Write-Output 'No approved updates selected.'"
 	}
 
+	manifestJSON, _ := json.Marshal(manifest)
+	manifestPayload, _ := canonicalUpdateManifestPayload(manifest)
+
 	behavior := strings.ToLower(strings.TrimSpace(rebootBehavior))
 	if behavior == "" {
 		behavior = "reboot_if_required"
 	}
 
-	return strings.Join([]string{
+	lines := []string{
 		"$ErrorActionPreference = 'Stop'",
 		"$ProgressPreference = 'SilentlyContinue'",
+		"$updateManifest = @'",
+		string(manifestJSON),
+		"'@",
+		"$updateManifestPayload = @'",
+		string(manifestPayload),
+		"'@",
+		"Write-Output ('Update manifest id: " + strings.ReplaceAll(manifest.ManifestID, "'", "''") + "')",
+		"Write-Output ('Update manifest signature scheme: " + strings.ReplaceAll(manifest.SignatureScheme, "'", "''") + "')",
+		"Write-Output ('Update manifest signature: " + strings.ReplaceAll(manifest.Signature, "'", "''") + "')",
 		"$approvedIds = @(" + strings.Join(quotedIDs, ",") + ")",
 		"Write-Output ('Approved update targets: ' + $approvedIds.Count)",
 		"$session = New-Object -ComObject Microsoft.Update.Session",
@@ -679,10 +778,12 @@ func buildInstallApprovedUpdatesScript(approvedUpdateIDs []string, rebootBehavio
 		"} elseif ($rebootBehavior -eq 'reboot_if_required' -and $rebootRequired) {",
 		"    shutdown /r /t 30 /c 'Restart initiated by patch automation (reboot required)'",
 		"}",
-	}, "\n")
+	}
+
+	return strings.Join(lines, "\n")
 }
 
-func buildUninstallPatchByKBScript(kbID string) string {
+func buildUninstallPatchByKBScript(kbID string, manifest UpdateCommandManifest) string {
 	kb := strings.ToUpper(strings.TrimSpace(kbID))
 	kbNum := strings.TrimPrefix(kb, "KB")
 	kbNum = strings.TrimSpace(kbNum)
@@ -691,8 +792,20 @@ func buildUninstallPatchByKBScript(kbID string) string {
 		return "Write-Output 'Invalid KB ID'; exit 1"
 	}
 
-	return strings.Join([]string{
+	manifestJSON, _ := json.Marshal(manifest)
+	manifestPayload, _ := canonicalUpdateManifestPayload(manifest)
+
+	lines := []string{
 		"$ErrorActionPreference = 'Stop'",
+		"$updateManifest = @'",
+		string(manifestJSON),
+		"'@",
+		"$updateManifestPayload = @'",
+		string(manifestPayload),
+		"'@",
+		"Write-Output ('Update manifest id: " + strings.ReplaceAll(manifest.ManifestID, "'", "''") + "')",
+		"Write-Output ('Update manifest signature scheme: " + strings.ReplaceAll(manifest.SignatureScheme, "'", "''") + "')",
+		"Write-Output ('Update manifest signature: " + strings.ReplaceAll(manifest.Signature, "'", "''") + "')",
 		"$kb = '" + strings.ReplaceAll(kb, "'", "''") + "'",
 		"$kbNum = '" + strings.ReplaceAll(kbNum, "'", "''") + "'",
 		"Write-Output ('Uninstall request queued for ' + $kb)",
@@ -703,5 +816,7 @@ func buildUninstallPatchByKBScript(kbID string) string {
 		"    throw ('Uninstall failed with exit code ' + $p.ExitCode)",
 		"}",
 		"if ($p.ExitCode -eq 3010) { Write-Output 'Reboot required to complete uninstall.' }",
-	}, "\n")
+	}
+
+	return strings.Join(lines, "\n")
 }

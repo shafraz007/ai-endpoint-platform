@@ -60,6 +60,18 @@ QUEUE_AGENT_CHAT_SUBJECT=agent.chat.shadow
 QUEUE_AGENT_CHAT_CONSUMER_GROUP=agent-chat-workers
 QUEUE_AGENT_CHAT_MAX_ATTEMPTS=4
 QUEUE_AGENT_CHAT_DLQ_SUBJECT=agent.chat.shadow.dlq
+UPDATE_MANIFEST_SIGNING_KEY=dev_update_manifest_signing_key
+AGENT_UPDATE_DIR=C:/armada-updates
+UPDATE_ROLLOUT_POLICY_VERSION=1
+UPDATE_ROLLOUT_RING_COUNT=4
+UPDATE_ROLLOUT_ACTIVE_RING=4
+UPDATE_ROLLOUT_RING_SALT=dev
+UPDATE_ROLLOUT_HEALTH_GATE_ENABLED=true
+UPDATE_ROLLOUT_HEALTH_WINDOW_MINUTES=180
+UPDATE_ROLLOUT_HEALTH_MIN_SAMPLES=5
+UPDATE_ROLLOUT_HEALTH_MAX_FAILURE_RATE_PCT=40
+UPDATE_ROLLOUT_AUTO_ROLLBACK_ENABLED=true
+UPDATE_ROLLOUT_AUTO_ROLLBACK_RING_STEP=1
 
 # Agent
 SERVER_URL=http://localhost:8070
@@ -121,6 +133,8 @@ export DATABASE_URL=postgres://aidev:devpassword@localhost:5432/ai_agents?sslmod
 export SERVER_PORT=8070
 export AGENT_JWT_SECRET=dev_agent_secret
 export ADMIN_JWT_SECRET=dev_admin_secret
+export UPDATE_MANIFEST_SIGNING_KEY=dev_update_manifest_signing_key
+export AGENT_UPDATE_DIR=C:/armada-updates
 go run ./cmd/server
 ```
 
@@ -145,6 +159,92 @@ Expected output:
 2026-02-17T10:30:05Z Agent started - ID: <uuid>, Hostname: <hostname>, Version: 1.0.0
 2026-02-17T10:30:05Z Server URL: http://localhost:8070, Heartbeat interval: 30s
 2026-02-17T10:30:35Z Heartbeat sent successfully
+```
+
+### Windows Service Quickstart (Recommended for Deployment)
+
+For Windows endpoint deployment, run `agent.exe` as a service (`ArmadaAgent`) instead of launching it manually in a shell.
+
+Run from an **elevated** PowerShell window:
+
+```powershell
+Set-Location C:\Users\ShafrazNizamdeen\ai-endpoint-platform
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 `
+    -BuildFromSource `
+    -SourceDir . `
+    -ServiceName ArmadaAgent `
+    -InstallDir "C:\Program Files\Armada" `
+    -ServerURL "http://localhost:18070" `
+    -AgentJWTSecret "armada-test-secret-2024" `
+    -AgentAIProvider "ollama" `
+    -AgentAIEndpoint "http://127.0.0.1:11434/api/chat" `
+    -AgentAIModel "llama3.2" `
+    -LogToConsole "true" `
+    -UseLocalSystem
+
+Start-Service ArmadaAgent
+Get-Service ArmadaAgent
+```
+
+Expected service state:
+- `Name`: `ArmadaAgent`
+- `Status`: `Running`
+- `StartType`: `Automatic`
+
+Validate endpoint heartbeat from server side:
+
+```powershell
+$base='http://localhost:18070'
+$token=(go run ./scripts/jwtgen -subject admin -role admin -secret test-secret-admin-jwt -ttl 3600).Trim()
+$headers=@{ Authorization=("Bearer "+$token) }
+Invoke-RestMethod -Uri "$base/api/agents" -Headers $headers -Method GET | Where-Object { $_.runtime_type -eq 'windows-host' }
+```
+
+Important:
+- Do not run `agent.exe` manually after service install; this creates duplicate host identities.
+- In PowerShell, pass the installer path as `.\scripts\install-agent-service.ps1` (not markdown link syntax).
+
+If service startup fails with `7009/7000`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName ArmadaAgent -ServerURL "http://localhost:18070" -AgentJWTSecret "armada-test-secret-2024" -UseLocalSystem
+Start-Service ArmadaAgent
+```
+
+### Agent Binary Self-Update (Windows)
+
+Self-update uses a signed `agent_update` command and requires:
+- Agent running as Windows service (`ArmadaAgent`) under elevated account (`LocalSystem` recommended)
+- `UPDATE_MANIFEST_SIGNING_KEY` configured on server (or fallback to `AGENT_JWT_SECRET`)
+- Optional server-hosted binaries directory via `AGENT_UPDATE_DIR`
+
+Publish a version (admin API):
+
+```powershell
+$base='http://localhost:8070'
+$token=(go run ./scripts/jwtgen -subject admin -role admin -secret dev_admin_secret -ttl 3600).Trim()
+$headers=@{ Authorization=("Bearer "+$token); 'Content-Type'='application/json' }
+
+$body=@{
+    version='1.0.1'
+    download_url='/api/agent-update/download/1.0.1'
+    sha256='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+    changelog='Service stability improvements'
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "$base/api/agent-update/version" -Method PUT -Headers $headers -Body $body
+```
+
+Queue update for one agent:
+
+```powershell
+Invoke-RestMethod -Uri "$base/api/agents/<agent_id>/agent-update/install" -Method POST -Headers $headers -Body '{"ttl_minutes":60}'
+```
+
+Check update history:
+
+```powershell
+Invoke-RestMethod -Uri "$base/api/agents/<agent_id>/agent-update/history" -Method GET -Headers $headers
 ```
 
 ### Terminal 3: Start Chat Worker

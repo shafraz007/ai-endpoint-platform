@@ -7,6 +7,7 @@ This folder provides a practical starting point for deploying `agent.exe` with W
 - `bootstrap/install-agent-with-winget.ps1`
   - Endpoint-side bootstrap script.
   - Uses `winget` for prerequisite install flow and then applies service configuration with `install-agent-service.ps1`.
+  - Configures and starts `ArmadaAgent` as a native Windows service (SCM).
 - `templates/*.yaml`
   - Private WinGet manifest templates (`version`, `installer`, `locale`).
 
@@ -15,6 +16,7 @@ This folder provides a practical starting point for deploying `agent.exe` with W
 1. Host release artifacts on HTTPS:
    - `agent.exe`
    - `install-agent-service.ps1`
+  - Ensure `agent.exe` is built from current code (service-capable binary)
 2. Deploy the bootstrap script through RMM/Intune/SCCM.
 3. Optionally publish a private WinGet package using the template manifests.
 
@@ -121,6 +123,8 @@ Test-NetConnection your-server -Port 8070
 Get-ChildItem "C:\ProgramData\Armada\logs"
 ```
 
+Expected service state: `ArmadaAgent` should be `Running` and `StartType` should be `Automatic`.
+
 ### 9. Verify server side
 
 - Open `/agents`
@@ -154,4 +158,11 @@ Restart-Service ArmadaAgent
 [Environment]::GetEnvironmentVariable("AGENT_JWT_SECRET","Machine")
 Get-Service ArmadaAgent
 Get-ChildItem "C:\ProgramData\Armada\logs" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+```
+
+If startup fails with `7009/7000`, reinstall service wiring with latest binary:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName ArmadaAgent -ServerURL "http://your-server:8070" -AgentJWTSecret "<shared_agent_secret>" -UseLocalSystem
+Start-Service ArmadaAgent
 ```

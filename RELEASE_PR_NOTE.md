@@ -109,3 +109,22 @@ Runtime validation performed:
 - Verified end-to-end queue flow (`server -> chat-worker -> agent -> chat reply`).
 - Verified controlled failure simulation triggers retries and dead-letter emission.
 - Verified no duplicate final replies in current single-worker + idempotent command path.
+
+## OS patch rollout governance addendum (2026-03-19)
+
+### Additional changes
+- Added signed-manifest rollout policy versioning and action TTL enforcement for update queue commands.
+- Added deterministic ring assignment (`ring_count`, `active_ring`, `ring_salt`) and install-stage gating.
+- Added health-gate evaluation with auto rollback of effective active ring when failure-rate thresholds are exceeded.
+- Added admin rollout control endpoints:
+  - `GET /api/os-patch/rollout-policy`
+  - `PUT /api/os-patch/rollout-policy`
+  - `POST /api/os-patch/rollout-policy/reset`
+- Added rollout telemetry report endpoint:
+  - `GET /api/reports/os-patch-rollout?limit=<n>`
+- Added Settings UI controls and Reports UI telemetry panel for rollout operations.
+
+### Runtime validation addendum
+- Verified rollout policy read/update/reset through admin API and Settings UI.
+- Verified install queueing obeys effective active ring and health-gate rollback decisions.
+- Verified rollout telemetry API/report includes gate state, ring distribution, and recent install outcomes.

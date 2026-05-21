@@ -724,6 +724,74 @@
         </section>
 
         <section class="section">
+            <h2>Update Rollout Approval Controls</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Policy Version</label>
+                    <input id="rollout-policy-version" type="number" min="1" value="1">
+                </div>
+                <div>
+                    <label>Default Manifest Version</label>
+                    <input id="rollout-default-manifest-version" type="number" min="1" value="1">
+                </div>
+                <div>
+                    <label>Allowed Manifest Versions (comma)</label>
+                    <input id="rollout-allowed-manifest-versions" placeholder="1,2">
+                </div>
+                <div>
+                    <label>Install TTL (minutes)</label>
+                    <input id="rollout-install-ttl" type="number" min="1" value="30">
+                </div>
+                <div>
+                    <label>Uninstall TTL (minutes)</label>
+                    <input id="rollout-uninstall-ttl" type="number" min="1" value="30">
+                </div>
+                <div>
+                    <label>Ring Count</label>
+                    <input id="rollout-ring-count" type="number" min="1" value="4">
+                </div>
+                <div>
+                    <label>Active Ring</label>
+                    <input id="rollout-active-ring" type="number" min="1" value="4">
+                </div>
+                <div>
+                    <label>Ring Salt</label>
+                    <input id="rollout-ring-salt" placeholder="default">
+                </div>
+                <div class="inline">
+                    <input id="rollout-health-enabled" class="checkbox" type="checkbox" checked>
+                    <label>Health Gate Enabled</label>
+                </div>
+                <div>
+                    <label>Health Window (minutes)</label>
+                    <input id="rollout-health-window" type="number" min="1" value="180">
+                </div>
+                <div>
+                    <label>Health Min Samples</label>
+                    <input id="rollout-health-min-samples" type="number" min="1" value="5">
+                </div>
+                <div>
+                    <label>Health Max Failure Rate (%)</label>
+                    <input id="rollout-health-max-failure-rate" type="number" min="0" max="100" step="0.1" value="40">
+                </div>
+                <div class="inline">
+                    <input id="rollout-auto-rollback-enabled" class="checkbox" type="checkbox" checked>
+                    <label>Auto Rollback Enabled</label>
+                </div>
+                <div>
+                    <label>Auto Rollback Ring Step</label>
+                    <input id="rollout-auto-rollback-step" type="number" min="1" value="1">
+                </div>
+            </div>
+            <div class="action-row" style="gap:10px; justify-content:flex-end;">
+                <button class="primary-btn" onclick="saveUpdateRolloutPolicySettings()">Save Rollout Controls</button>
+                <button class="small-btn" onclick="refreshUpdateRolloutPolicySettings()">Refresh</button>
+                <button class="danger-btn" onclick="resetUpdateRolloutPolicySettings()">Reset to Env/Defaults</button>
+            </div>
+            <div class="muted" id="rollout-policy-summary" style="margin-top:10px;">No rollout control data loaded yet.</div>
+        </section>
+
+        <section class="section">
             <h2>Threshold Profiles</h2>
             <div class="muted" style="margin-bottom:10px;">Manage active threshold rules used by issues and alerts detection.</div>
             <div class="form-grid">
@@ -797,6 +865,8 @@
             osPatchPolicy: '/api/os-patch/policy',
             osPatchPolicyReset: '/api/os-patch/policy/reset',
             osPatchPolicyAudit: '/api/os-patch/policy/audit?limit=50',
+            osPatchRolloutPolicy: '/api/os-patch/rollout-policy',
+            osPatchRolloutPolicyReset: '/api/os-patch/rollout-policy/reset',
             osPatchUpdates: '/api/os-patch/updates?limit=2000',
             osPatchUpdatesActions: '/api/os-patch/updates/actions',
             thresholdProfiles: '/api/threshold-profiles',
@@ -817,6 +887,7 @@
         let cachedOSPatchPolicy = null;
         let cachedOSPatchAuditEntries = [];
         let cachedAggregatedPatchUpdates = [];
+        let cachedUpdateRolloutPolicy = null;
         let cachedThresholdProfiles = [];
         let cachedActiveThresholdProfile = null;
         let jsonEditResolver = null;
@@ -1071,6 +1142,7 @@
                 await loadOSPatchAudit();
                 await loadAggregatedPatchUpdates();
                 renderOSPatchSummary();
+                await initializeUpdateRolloutPolicySection();
                 await loadThresholdProfiles();
                 
                 hideStatus();
@@ -1832,6 +1904,158 @@
             } catch (error) {
                 showStatus('Failed to reset OS patch policy: ' + error.message, 'error');
             }
+        }
+
+        function defaultUpdateRolloutPolicySettings() {
+            return {
+                policy: {
+                    policy_version: 1,
+                    default_manifest_version: 1,
+                    allowed_manifest_versions: [1],
+                    install_approved_ttl_minutes: 30,
+                    uninstall_patch_kb_ttl_minutes: 30,
+                    ring_count: 4,
+                    active_ring: 4,
+                    ring_salt: 'default',
+                    health_gate_enabled: true,
+                    health_window_minutes: 180,
+                    health_min_samples: 5,
+                    health_max_failure_rate_pct: 40,
+                    auto_rollback_enabled: true,
+                    auto_rollback_ring_step: 1
+                },
+                effective_active_ring: 4,
+                health_snapshot: { samples: 0, failures: 0, failure_rate_pct: 0, healthy: true },
+                override_active: false
+            };
+        }
+
+        function mapUpdateRolloutPolicyResponse(value) {
+            const defaults = defaultUpdateRolloutPolicySettings();
+            if (!value || typeof value !== 'object') {
+                return defaults;
+            }
+            const policy = (value.policy && typeof value.policy === 'object') ? value.policy : defaults.policy;
+            return {
+                policy: {
+                    policy_version: Number(policy.policy_version || defaults.policy.policy_version),
+                    default_manifest_version: Number(policy.default_manifest_version || defaults.policy.default_manifest_version),
+                    allowed_manifest_versions: Array.isArray(policy.allowed_manifest_versions) && policy.allowed_manifest_versions.length > 0
+                        ? policy.allowed_manifest_versions.map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0)
+                        : defaults.policy.allowed_manifest_versions,
+                    install_approved_ttl_minutes: Number(policy.install_approved_ttl_minutes || defaults.policy.install_approved_ttl_minutes),
+                    uninstall_patch_kb_ttl_minutes: Number(policy.uninstall_patch_kb_ttl_minutes || defaults.policy.uninstall_patch_kb_ttl_minutes),
+                    ring_count: Number(policy.ring_count || defaults.policy.ring_count),
+                    active_ring: Number(policy.active_ring || defaults.policy.active_ring),
+                    ring_salt: String(policy.ring_salt || defaults.policy.ring_salt),
+                    health_gate_enabled: policy.health_gate_enabled !== false,
+                    health_window_minutes: Number(policy.health_window_minutes || defaults.policy.health_window_minutes),
+                    health_min_samples: Number(policy.health_min_samples || defaults.policy.health_min_samples),
+                    health_max_failure_rate_pct: Number(policy.health_max_failure_rate_pct ?? defaults.policy.health_max_failure_rate_pct),
+                    auto_rollback_enabled: policy.auto_rollback_enabled !== false,
+                    auto_rollback_ring_step: Number(policy.auto_rollback_ring_step || defaults.policy.auto_rollback_ring_step)
+                },
+                effective_active_ring: Number(value.effective_active_ring || defaults.effective_active_ring),
+                health_snapshot: value.health_snapshot || defaults.health_snapshot,
+                override_active: !!value.override_active
+            };
+        }
+
+        function renderUpdateRolloutPolicySummary() {
+            const model = mapUpdateRolloutPolicyResponse(cachedUpdateRolloutPolicy || defaultUpdateRolloutPolicySettings());
+            const el = document.getElementById('rollout-policy-summary');
+            if (!el) return;
+
+            const hs = model.health_snapshot || {};
+            const healthText = `health ${hs.healthy ? 'healthy' : 'blocked'} (${Number(hs.failures || 0)}/${Number(hs.samples || 0)} failures, ${Number(hs.failure_rate_pct || 0).toFixed(1)}%)`;
+            const source = model.override_active ? 'runtime override active' : 'env/default policy';
+            el.textContent = `Rollout policy v${model.policy.policy_version} • manifests ${model.policy.allowed_manifest_versions.join(',')} • ring ${model.policy.active_ring}/${model.policy.ring_count} (effective ${model.effective_active_ring}) • ${healthText} • ${source}`;
+        }
+
+        async function initializeUpdateRolloutPolicySection() {
+            let model = defaultUpdateRolloutPolicySettings();
+            try {
+                cachedUpdateRolloutPolicy = await apiFetch(api.osPatchRolloutPolicy);
+                model = mapUpdateRolloutPolicyResponse(cachedUpdateRolloutPolicy);
+            } catch (error) {
+                console.warn('Failed to load update rollout policy controls, using defaults.', error);
+                cachedUpdateRolloutPolicy = null;
+            }
+
+            const p = model.policy;
+            document.getElementById('rollout-policy-version').value = p.policy_version;
+            document.getElementById('rollout-default-manifest-version').value = p.default_manifest_version;
+            document.getElementById('rollout-allowed-manifest-versions').value = (p.allowed_manifest_versions || []).join(', ');
+            document.getElementById('rollout-install-ttl').value = p.install_approved_ttl_minutes;
+            document.getElementById('rollout-uninstall-ttl').value = p.uninstall_patch_kb_ttl_minutes;
+            document.getElementById('rollout-ring-count').value = p.ring_count;
+            document.getElementById('rollout-active-ring').value = p.active_ring;
+            document.getElementById('rollout-ring-salt').value = p.ring_salt || '';
+            document.getElementById('rollout-health-enabled').checked = !!p.health_gate_enabled;
+            document.getElementById('rollout-health-window').value = p.health_window_minutes;
+            document.getElementById('rollout-health-min-samples').value = p.health_min_samples;
+            document.getElementById('rollout-health-max-failure-rate').value = p.health_max_failure_rate_pct;
+            document.getElementById('rollout-auto-rollback-enabled').checked = !!p.auto_rollback_enabled;
+            document.getElementById('rollout-auto-rollback-step').value = p.auto_rollback_ring_step;
+
+            renderUpdateRolloutPolicySummary();
+        }
+
+        function gatherUpdateRolloutPolicyFromUI() {
+            return {
+                policy_version: Number(document.getElementById('rollout-policy-version').value || 1),
+                default_manifest_version: Number(document.getElementById('rollout-default-manifest-version').value || 1),
+                allowed_manifest_versions: parseCSVList(document.getElementById('rollout-allowed-manifest-versions').value)
+                    .map(v => Number(v))
+                    .filter(v => Number.isFinite(v) && v > 0),
+                install_approved_ttl_minutes: Number(document.getElementById('rollout-install-ttl').value || 30),
+                uninstall_patch_kb_ttl_minutes: Number(document.getElementById('rollout-uninstall-ttl').value || 30),
+                ring_count: Number(document.getElementById('rollout-ring-count').value || 4),
+                active_ring: Number(document.getElementById('rollout-active-ring').value || 4),
+                ring_salt: (document.getElementById('rollout-ring-salt').value || '').trim(),
+                health_gate_enabled: document.getElementById('rollout-health-enabled').checked,
+                health_window_minutes: Number(document.getElementById('rollout-health-window').value || 180),
+                health_min_samples: Number(document.getElementById('rollout-health-min-samples').value || 5),
+                health_max_failure_rate_pct: Number(document.getElementById('rollout-health-max-failure-rate').value || 40),
+                auto_rollback_enabled: document.getElementById('rollout-auto-rollback-enabled').checked,
+                auto_rollback_ring_step: Number(document.getElementById('rollout-auto-rollback-step').value || 1)
+            };
+        }
+
+        async function saveUpdateRolloutPolicySettings() {
+            const payload = gatherUpdateRolloutPolicyFromUI();
+            if (payload.allowed_manifest_versions.length === 0) {
+                showStatus('Allowed manifest versions must include at least one positive version.', 'error');
+                return;
+            }
+            try {
+                cachedUpdateRolloutPolicy = await apiFetch(api.osPatchRolloutPolicy, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload)
+                });
+                await initializeUpdateRolloutPolicySection();
+                showStatus('Update rollout controls saved.', 'success');
+            } catch (error) {
+                showStatus('Failed to save update rollout controls: ' + error.message, 'error');
+            }
+        }
+
+        async function resetUpdateRolloutPolicySettings() {
+            try {
+                cachedUpdateRolloutPolicy = await apiFetch(api.osPatchRolloutPolicyReset, {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+                await initializeUpdateRolloutPolicySection();
+                showStatus('Update rollout controls reset to env/default values.', 'success');
+            } catch (error) {
+                showStatus('Failed to reset update rollout controls: ' + error.message, 'error');
+            }
+        }
+
+        async function refreshUpdateRolloutPolicySettings() {
+            await initializeUpdateRolloutPolicySection();
+            showStatus('Update rollout controls refreshed.', 'success');
         }
 
         function recurrenceForOSPatch(type) {

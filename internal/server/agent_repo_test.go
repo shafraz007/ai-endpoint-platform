@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,5 +60,89 @@ func TestMarkAgentsOffline(t *testing.T) {
 
 	if affected < 1 {
 		t.Fatalf("expected at least 1 agent to be marked offline, got %d", affected)
+	}
+}
+
+func TestUpsertAgentStoresCapabilityRegistry(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("DATABASE_URL not set; skipping DB integration test")
+	}
+
+	if err := InitDB(dbURL); err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer CloseDB()
+
+	agentID := "test-agent-capability-registry"
+	t.Cleanup(func() {
+		DB.Exec(context.Background(), "DELETE FROM agents WHERE agent_id = $1", agentID)
+	})
+
+	err := UpsertAgent(
+		agentID,
+		"capability-host",
+		"",
+		"127.0.0.1",
+		"10.0.0.10",
+		"online",
+		"test-version",
+		nil,
+		nil,
+		"UTC",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"test-cpu",
+		"8 GB",
+		"",
+		"",
+		"",
+		"",
+		"[]",
+		"[]",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		false,
+		false,
+		nil,
+		"windows-host",
+		`[{"name":"core.ai_task","version":"1.0.0"}]`,
+		`["ai.task","execution.powershell"]`,
+		`{"core.ai_task":0.9}`,
+	)
+	if err != nil {
+		t.Fatalf("UpsertAgent failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	agent, err := GetAgentByID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("GetAgentByID failed: %v", err)
+	}
+	if agent.RuntimeType != "windows-host" {
+		t.Fatalf("runtime type: got %q want windows-host", agent.RuntimeType)
+	}
+	if !strings.Contains(agent.ToolsJSON, "core.ai_task") {
+		t.Fatalf("expected tools_json to contain core.ai_task, got %q", agent.ToolsJSON)
+	}
+	if !strings.Contains(agent.CapabilitiesJSON, "execution.powershell") {
+		t.Fatalf("expected capabilities_json to contain execution.powershell, got %q", agent.CapabilitiesJSON)
+	}
+	if !strings.Contains(agent.ToolConfidenceJSON, "core.ai_task") {
+		t.Fatalf("expected tool_confidence_json to contain core.ai_task, got %q", agent.ToolConfidenceJSON)
 	}
 }

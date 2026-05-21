@@ -178,6 +178,19 @@ QUEUE_AGENT_CHAT_CONSUMER_GROUP=agent-chat-workers
 QUEUE_AGENT_CHAT_MAX_ATTEMPTS=4
 QUEUE_AGENT_CHAT_DLQ_SUBJECT=agent.chat.shadow.dlq
 
+# Signed update manifest + rollout controls
+UPDATE_MANIFEST_SIGNING_KEY=<strong_shared_signing_key>
+UPDATE_ROLLOUT_POLICY_VERSION=1
+UPDATE_ROLLOUT_RING_COUNT=4
+UPDATE_ROLLOUT_ACTIVE_RING=4
+UPDATE_ROLLOUT_RING_SALT=prod
+UPDATE_ROLLOUT_HEALTH_GATE_ENABLED=true
+UPDATE_ROLLOUT_HEALTH_WINDOW_MINUTES=180
+UPDATE_ROLLOUT_HEALTH_MIN_SAMPLES=5
+UPDATE_ROLLOUT_HEALTH_MAX_FAILURE_RATE_PCT=40
+UPDATE_ROLLOUT_AUTO_ROLLBACK_ENABLED=true
+UPDATE_ROLLOUT_AUTO_ROLLBACK_RING_STEP=1
+
 # Logging
 LOG_DIR=/var/log/ai-endpoint-platform
 LOG_TO_CONSOLE=false
@@ -408,6 +421,8 @@ Start-ScheduledTask -TaskName "ArmadaServer"
 
 Run from an elevated PowerShell window on each endpoint (or via RMM/automation):
 
+`ArmadaAgent` service mode is the default and recommended Windows deployment mode.
+
 Build from source mode:
 
 ```powershell
@@ -458,6 +473,13 @@ Troubleshooting:
 Restart-Service ArmadaAgent
 ```
 
+- `7009/7000` (service did not respond in time): ensure endpoint uses latest service-capable `agent.exe` and reinstall service configuration from elevated PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-agent-service.ps1 -BuildFromSource -SourceDir . -ServiceName ArmadaAgent -ServerURL "http://<server>:8070" -AgentJWTSecret "<shared_agent_secret>" -UseLocalSystem
+Start-Service ArmadaAgent
+```
+
 - Service starts but endpoint is not visible in server UI:
 
 ```powershell
@@ -469,6 +491,10 @@ Get-ChildItem "C:\ProgramData\Armada\logs" -File | Sort-Object LastWriteTime -De
   - validate account password,
   - ensure account has `Log on as a service`,
   - or switch to LocalSystem during incident recovery.
+
+- Prevent duplicate endpoint identities:
+  - run the agent either as service or manual process, not both,
+  - after service install, stop any manually started `agent.exe` process.
 
 - Re-run installer to repair configuration:
 
@@ -965,6 +991,798 @@ curl -v http://localhost:8070
 - [ ] Capacity planning review
 - [ ] Security audit
 - [ ] Load testing
+
+
+## Operations
+
+### Agent Version Update
+
+This section describes how to update agent versions, both manually and via auto-deployment.
+
+#### Manual Update Steps
+
+1. Build binary with embedded version (example for Windows):
+```powershell
+$ver = "1.0.7.exe"
+go build -ldflags "-s -w -X main.agentVersion=$ver" -o "agent-updates/$ver" ./cmd/agent
+```
+2. Compute binary hash:
+```powershell
+$sha = (Get-FileHash "agent-updates/$ver" -Algorithm SHA256).Hash.ToLower()
+```
+3. Upload binary to server-hosted update storage (`AGENT_UPDATE_DIR`):
+  - `POST /api/agent-update/upload` (admin)
+4. Publish version metadata:
+  - `PUT /api/agent-update/version` (admin)
+5. Queue the update command:
+  - Single agent: `POST /api/agents/{id}/agent-update/install` (admin)
+  - Bulk agents: `POST /api/agent-update/install/bulk` (admin)
+6. Monitor rollout:
+  - `GET /api/agents/{id}/agent-update/history`
+  - `GET /api/commands?agent_id={id}&limit=...`
+
+UI paths:
+- Per-agent update workflow: `/agents/{id}` -> `Commands` tab -> `Agent Self-Update`
+- Bulk queue update workflow: `/agents/manage` -> select agents -> `Queue Update (Selected)`
+
+#### API Release Runbook (Copy/Paste)
+
+```powershell
+$base = "http://<server>:8070"
+$adminJwt = "<admin_jwt>"
+$agentId = "<agent_id>"
+$ver = "1.0.7.exe"
+$filePath = "agent-updates/$ver"
+$sha = (Get-FileHash $filePath -Algorithm SHA256).Hash.ToLower()
+
+# 1) Upload
+$upload = curl.exe -s -X POST "$base/api/agent-update/upload" `
+  -H "Authorization: Bearer $adminJwt" `
+  -F "version=$ver" `
+  -F "file=@$filePath" | ConvertFrom-Json
+
+# 2) Publish
+$publishBody = @{
+  version      = $ver
+  download_url = $upload.download_url
+  sha256       = $sha
+  changelog    = "Release $ver"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Put -Uri "$base/api/agent-update/version" `
+  -Headers @{ Authorization = "Bearer $adminJwt"; "Content-Type" = "application/json" } `
+  -Body $publishBody
+
+# 3) Queue for one agent
+Invoke-RestMethod -Method Post -Uri "$base/api/agents/$agentId/agent-update/install" `
+  -Headers @{ Authorization = "Bearer $adminJwt"; "Content-Type" = "application/json" } `
+  -Body '{"ttl_minutes":60}'
+```
+
+#### Final End-to-End Run (Production PowerShell)
+
+Use this when you want one complete operational flow from token generation to queue verification.
+
+```powershell
+$ErrorActionPreference = "Stop"
+
+# Inputs
+$base = "https://<server>:8070"
+$agentId = "<agent_id>"
+$ver = "1.0.7.exe"
+$filePath = "agent-updates/$ver"
+
+# 1) Resolve ADMIN_JWT_SECRET (prefer secret manager/vault in production)
+$secret = [Environment]::GetEnvironmentVariable("ADMIN_JWT_SECRET", "Machine")
+if ([string]::IsNullOrWhiteSpace($secret)) {
+  throw "ADMIN_JWT_SECRET not found. Load it from your production secret source."
+}
+
+# 2) Generate short-lived admin JWT
+$adminJwt = go run .\scripts\jwtgen\main.go -subject admin -role admin -secret $secret -ttl 600
+if ([string]::IsNullOrWhiteSpace($adminJwt)) {
+  throw "Failed to generate admin JWT"
+}
+
+# 3) Compute hash and upload binary
+if (!(Test-Path $filePath)) {
+  throw "Binary not found: $filePath"
+}
+$sha = (Get-FileHash $filePath -Algorithm SHA256).Hash.ToLower()
+
+$upload = curl.exe -s -X POST "$base/api/agent-update/upload" `
+  -H "Authorization: Bearer $adminJwt" `
+  -F "version=$ver" `
+  -F "file=@$filePath" | ConvertFrom-Json
+
+if (-not $upload.download_url) {
+  throw "Upload failed or missing download_url"
+}
+
+# 4) Publish metadata
+$publishBody = @{
+  version      = $ver
+  download_url = $upload.download_url
+  sha256       = $sha
+  changelog    = "Release $ver"
+} | ConvertTo-Json
+
+$published = Invoke-RestMethod -Method Put -Uri "$base/api/agent-update/version" `
+  -Headers @{ Authorization = "Bearer $adminJwt"; "Content-Type" = "application/json" } `
+  -Body $publishBody
+
+# 5) Queue update for one agent
+$queued = Invoke-RestMethod -Method Post -Uri "$base/api/agents/$agentId/agent-update/install" `
+  -Headers @{ Authorization = "Bearer $adminJwt"; "Content-Type" = "application/json" } `
+  -Body '{"ttl_minutes":60}'
+
+$commandId = $queued.command_id
+if (-not $commandId) {
+  throw "Queue response missing command_id"
+}
+
+# 6) Verify queued command status
+$cmds = Invoke-RestMethod -Method Get -Uri "$base/api/commands?agent_id=$agentId&limit=20" `
+  -Headers @{ Authorization = "Bearer $adminJwt" }
+
+$target = $cmds | Where-Object { $_.id -eq $commandId } | Select-Object -First 1
+$target | Format-List id,agent_id,command_type,status,created_at
+
+# 7) Optional rollback action: cancel if still queued
+if ($target -and $target.status -eq "queued") {
+  $cancelled = Invoke-RestMethod -Method Post `
+    -Uri "$base/api/agents/$agentId/commands/$commandId/cancel" `
+    -Headers @{ Authorization = "Bearer $adminJwt"; "Content-Type" = "application/json" }
+
+  $cancelled | Format-List id,agent_id,command_type,status,created_at
+}
+
+# 8) Monitor install results
+Invoke-RestMethod -Method Get -Uri "$base/api/agents/$agentId/agent-update/history" `
+  -Headers @{ Authorization = "Bearer $adminJwt" } | ConvertTo-Json -Depth 6
+```
+
+Operational notes:
+- Use HTTPS for production (`$base = "https://..."`).
+- Keep token TTL short (`300-900` seconds).
+- Do not persist JWTs in scripts, commit history, or logs.
+
+#### Final End-to-End Run (Production Bash/Linux)
+
+Use this when operating from a Linux jump host or directly on the server.
+
+```bash
+set -euo pipefail
+
+# Preflight: required tools
+for cmd in curl jq sha256sum go; do
+  command -v "$cmd" >/dev/null 2>&1 || {
+    echo "Missing required tool: $cmd" >&2
+    exit 1
+  }
+done
+
+# Inputs
+BASE="https://<server>:8070"
+AGENT_ID="<agent_id>"
+VER="1.0.7-linux"
+FILE_PATH="agent-updates/${VER}"
+
+# 1) Resolve ADMIN_JWT_SECRET (prefer secret manager/vault in production)
+# Example if using a systemd env file:
+ADMIN_JWT_SECRET="$(sudo awk -F= '/^ADMIN_JWT_SECRET=/{print $2}' /etc/ai-endpoint-platform/server.env | tail -n1)"
+
+if [ -z "${ADMIN_JWT_SECRET}" ]; then
+  echo "ADMIN_JWT_SECRET not found. Load it from your production secret source." >&2
+  exit 1
+fi
+
+# 2) Generate short-lived admin JWT
+ADMIN_JWT="$(go run ./scripts/jwtgen/main.go -subject admin -role admin -secret "${ADMIN_JWT_SECRET}" -ttl 600)"
+
+if [ -z "${ADMIN_JWT}" ]; then
+  echo "Failed to generate admin JWT" >&2
+  exit 1
+fi
+
+# 3) Compute hash and upload binary
+if [ ! -f "${FILE_PATH}" ]; then
+  echo "Binary not found: ${FILE_PATH}" >&2
+  exit 1
+fi
+
+SHA="$(sha256sum "${FILE_PATH}" | awk '{print tolower($1)}')"
+
+UPLOAD_JSON="$(curl -fsS -X POST "${BASE}/api/agent-update/upload" \
+  -H "Authorization: Bearer ${ADMIN_JWT}" \
+  -F "version=${VER}" \
+  -F "file=@${FILE_PATH}")"
+
+DOWNLOAD_URL="$(printf '%s' "${UPLOAD_JSON}" | jq -r '.download_url // empty')"
+if [ -z "${DOWNLOAD_URL}" ]; then
+  echo "Upload failed or missing download_url" >&2
+  echo "${UPLOAD_JSON}" >&2
+  exit 1
+fi
+
+# 4) Publish metadata
+PUBLISH_BODY="$(jq -nc \
+  --arg version "${VER}" \
+  --arg download_url "${DOWNLOAD_URL}" \
+  --arg sha256 "${SHA}" \
+  --arg changelog "Release ${VER}" \
+  '{version:$version,download_url:$download_url,sha256:$sha256,changelog:$changelog}')"
+
+curl -fsS -X PUT "${BASE}/api/agent-update/version" \
+  -H "Authorization: Bearer ${ADMIN_JWT}" \
+  -H "Content-Type: application/json" \
+  -d "${PUBLISH_BODY}" >/dev/null
+
+# 5) Queue update for one agent
+QUEUE_JSON="$(curl -fsS -X POST "${BASE}/api/agents/${AGENT_ID}/agent-update/install" \
+  -H "Authorization: Bearer ${ADMIN_JWT}" \
+  -H "Content-Type: application/json" \
+  -d '{"ttl_minutes":60}')"
+
+COMMAND_ID="$(printf '%s' "${QUEUE_JSON}" | jq -r '.command_id // empty')"
+if [ -z "${COMMAND_ID}" ]; then
+  echo "Queue response missing command_id" >&2
+  echo "${QUEUE_JSON}" >&2
+  exit 1
+fi
+
+# 6) Verify queued command status
+COMMANDS_JSON="$(curl -fsS "${BASE}/api/commands?agent_id=${AGENT_ID}&limit=20" \
+  -H "Authorization: Bearer ${ADMIN_JWT}")"
+
+TARGET_STATUS="$(printf '%s' "${COMMANDS_JSON}" | jq -r --argjson id "${COMMAND_ID}" '.[] | select(.id==$id) | .status' | head -n1)"
+echo "command_id=${COMMAND_ID} status=${TARGET_STATUS:-unknown}"
+
+# 7) Optional rollback action: cancel if still queued
+if [ "${TARGET_STATUS:-}" = "queued" ]; then
+  curl -fsS -X POST "${BASE}/api/agents/${AGENT_ID}/commands/${COMMAND_ID}/cancel" \
+    -H "Authorization: Bearer ${ADMIN_JWT}" \
+    -H "Content-Type: application/json" | jq '{id,agent_id,command_type,status,created_at}'
+fi
+
+# 8) Monitor install results
+curl -fsS "${BASE}/api/agents/${AGENT_ID}/agent-update/history" \
+  -H "Authorization: Bearer ${ADMIN_JWT}" | jq '.'
+```
+
+Linux notes:
+- Requires `curl`, `jq`, `sha256sum`, and `go` on the operator host.
+- Keep token TTL short (`300-900` seconds).
+- Do not persist JWTs in shell history or files.
+
+#### Example: Venom Windows Agent Validation
+
+Use this as a Windows-specific smoke test after publishing a `.exe` release. Replace the agent ID if the Venom endpoint was reprovisioned.
+
+```powershell
+$ErrorActionPreference = "Stop"
+
+$base = "https://<server>:8070"
+$agentId = "08685de0-10c8-434b-a8db-265ea6cc01f2"   # Historical Venom Windows agent
+$version = "1.0.7.exe"
+
+$secret = [Environment]::GetEnvironmentVariable("ADMIN_JWT_SECRET", "Machine")
+$adminJwt = go run .\scripts\jwtgen\main.go -subject admin -role admin -secret $secret -ttl 600
+$headers = @{ Authorization = "Bearer $adminJwt"; "Content-Type" = "application/json" }
+
+# 1) Inspect recent commands and confirm Windows payloads use .exe versions
+$commands = Invoke-RestMethod -Method Get -Uri "$base/api/commands?agent_id=$agentId&limit=10" `
+  -Headers @{ Authorization = "Bearer $adminJwt" }
+
+$commands | Select-Object id, command_type, status, created_at, payload
+
+# 2) If a queued linux payload appears by mistake, cancel it before dispatch
+$badQueued = $commands | Where-Object {
+  $_.status -eq "queued" -and $_.command_type -eq "agent_update" -and $_.payload -match "linux"
+} | Select-Object -First 1
+
+if ($badQueued) {
+  Invoke-RestMethod -Method Post -Uri "$base/api/agents/$agentId/commands/$($badQueued.id)/cancel" `
+    -Headers $headers | Format-List id,agent_id,command_type,status,created_at
+}
+
+# 3) Queue the expected Windows release
+$queued = Invoke-RestMethod -Method Post -Uri "$base/api/agents/$agentId/agent-update/install" `
+  -Headers $headers `
+  -Body '{"ttl_minutes":60}'
+
+$queued | Format-List
+
+# 4) Review update history and confirm the target version is a .exe build
+Invoke-RestMethod -Method Get -Uri "$base/api/agents/$agentId/agent-update/history" `
+  -Headers @{ Authorization = "Bearer $adminJwt" } | ConvertTo-Json -Depth 6
+```
+
+Windows validation notes:
+- For Windows agents, queued update payloads should reference `.exe` versions, not linux artifacts.
+- A successful Windows self-update typically reports output similar to `update to <version>.exe staged; ArmadaAgent service will restart automatically`.
+- If the agent was reprovisioned, get the current agent ID from `/api/agents` or the Web UI before running this example.
+
+#### How to Get `<admin_jwt>`
+
+Option 1 (recommended for API automation): generate with `jwtgen` using `ADMIN_JWT_SECRET`.
+
+```powershell
+# Replace with your actual server ADMIN_JWT_SECRET value
+$secret = "<admin_jwt_secret>"
+go run .\scripts\jwtgen\main.go -subject admin -role admin -secret $secret -ttl 3600
+```
+
+Option 2 (browser/UI session): log in at `/` with admin credentials.
+- This creates an `admin_session` cookie (works for UI and same-origin requests), but does not directly print a bearer JWT token.
+- For CLI/API calls with `Authorization: Bearer ...`, use Option 1.
+
+Security notes:
+- Keep `ADMIN_JWT_SECRET` private and rotate regularly.
+- Use short token TTL for operational runs.
+- Do not paste tokens into commit history, scripts checked into git, or chat logs.
+
+#### Auto-Deployment (Self-Update)
+
+1. Publish new agent binary to `AGENT_UPDATE_DIR` on the server.
+2. Ensure rollout policy and health-gate settings are configured:
+  - `UPDATE_ROLLOUT_POLICY_VERSION`, `UPDATE_ROLLOUT_RING_COUNT`, etc.
+3. Use admin API or UI to queue update commands for eligible agents.
+4. Monitor rollout progress in Reports UI and via API endpoints:
+  - `GET /api/agents/{id}/agent-update/history`
+  - `GET /api/reports/os-patch-rollout?limit=30`
+  - `GET /api/agent-update/versions`
+5. If failures occur, health-gate and auto-rollback will protect the fleet.
+
+#### Troubleshooting
+
+- Service fails to start: check environment variables, permissions, and logs.
+- Agent not visible: verify connectivity, logs, and correct binary placement.
+- Duplicate identities: ensure agent runs only as a service, not manual process.
+- For Windows, use `scripts/install-agent-service.ps1` to reinstall service and repair configuration.
+- For Linux, restart systemd service after binary swap when running under service supervision.
+- macOS self-update via `agent_update` command is not supported yet; use out-of-band replacement.
+
+#### Install Agent as Linux Service (systemd)
+
+Run these steps on each Linux endpoint as root or sudo.
+
+**1. Copy binary**
+
+```bash
+sudo mkdir -p /opt/armada
+sudo cp agent-linux-amd64 /opt/armada/agent
+# ARM64 endpoints:
+# sudo cp agent-linux-arm64 /opt/armada/agent
+sudo chmod 755 /opt/armada/agent
+```
+
+**2. Create env file**
+
+Create `/etc/armada/agent.env` (permissions `600`):
+
+```bash
+sudo mkdir -p /etc/armada
+
+sudo tee /etc/armada/agent.env > /dev/null <<'EOF'
+SERVER_URL=http://<server>:8070
+AGENT_JWT_SECRET=<shared_agent_secret>
+LOG_DIR=/var/log/armada
+LOG_TO_CONSOLE=false
+
+# Optional tuning
+# HEARTBEAT_INTERVAL_SECONDS=30
+# COMMAND_POLL_INTERVAL_SECONDS=30
+# METRICS_INTERVAL_SECONDS=60
+# REQUEST_TIMEOUT_SECONDS=10
+# MAX_RETRIES=3
+
+# Optional AI
+# AGENT_AI_PROVIDER=ollama
+# AGENT_AI_ENDPOINT=http://localhost:11434/v1/chat/completions
+# AGENT_AI_MODEL=llama3.2
+EOF
+
+sudo chown root:root /etc/armada/agent.env
+sudo chmod 600 /etc/armada/agent.env
+```
+
+**3. Create log directory**
+
+```bash
+sudo mkdir -p /var/log/armada
+```
+
+**4. Create systemd unit**
+
+Create `/etc/systemd/system/armada-agent.service`:
+
+```bash
+sudo tee /etc/systemd/system/armada-agent.service > /dev/null <<'EOF'
+[Unit]
+Description=Armada Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# HOME must be set so the agent can resolve os.UserConfigDir() for its identity file.
+# Without this, systemd services have no $HOME and the agent fails to start.
+Environment=HOME=/root
+EnvironmentFile=/etc/armada/agent.env
+ExecStart=/opt/armada/agent
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/armada/agent.log
+StandardError=append:/var/log/armada/agent.log
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=yes
+# ReadWritePaths must include:
+#   /var/log/armada  — agent log files
+#   /opt/armada      — self-update stages new binary here before rename
+#   /root/.config    — GetAgentID() stores agent_id in os.UserConfigDir() → /root/.config
+ReadWritePaths=/var/log/armada /opt/armada /root/.config
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+**5. Enable and start**
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable armada-agent
+sudo systemctl start armada-agent
+
+# Verify
+sudo systemctl status armada-agent
+sudo journalctl -u armada-agent -f
+```
+
+**Updating the binary** (e.g. after self-update or manual swap):
+
+```bash
+sudo systemctl stop armada-agent
+sudo cp agent-linux-amd64 /opt/armada/agent
+sudo chmod 755 /opt/armada/agent
+sudo systemctl start armada-agent
+sudo systemctl status armada-agent
+```
+
+**Uninstall:**
+
+```bash
+sudo systemctl stop armada-agent
+sudo systemctl disable armada-agent
+sudo rm /etc/systemd/system/armada-agent.service
+sudo systemctl daemon-reload
+sudo rm -rf /opt/armada /etc/armada /var/log/armada
+```
+
+**Troubleshooting:**
+
+- Agent not appearing in UI: check `SERVER_URL` and `AGENT_JWT_SECRET` in `/etc/armada/agent.env`, then `sudo systemctl restart armada-agent`.
+- View recent logs: `sudo journalctl -u armada-agent -n 50`.
+- Test connectivity: `curl -s http://<server>:8070/healthz`.
+
+#### Install Agent on TinyCore Linux (BusyBox / No systemd)
+
+TinyCore Linux uses a BusyBox init system with no systemd. The filesystem is RAM-based; only `/opt` (and other configured persistent paths) survive reboots. Run `filetool.sh -b` after every file change to save to disk.
+
+> **Architecture note:** TinyCore may be installed as 32-bit (`i686`) even on 64-bit hardware (e.g., Intel Atom). Verify with `uname -m` before copying the binary:
+> - `i686` → use the `linux/386` binary (e.g., `agent-updates/1.0.8-linux-386`)
+> - `x86_64` → use the `linux/amd64` binary (e.g., `agent-updates/1.0.8`)
+
+**1. Verify architecture**
+
+```bash
+uname -m
+# i686   → linux/386 binary
+# x86_64 → linux/amd64 binary
+```
+
+**2. Copy binary via SCP (binary mode — always)**
+
+From your Windows machine:
+
+```powershell
+# i686 / 32-bit TinyCore
+scp agent-updates/1.0.8-linux-386 tc@<tinycore-ip>:/tmp/agent
+
+# x86_64 TinyCore
+scp agent-updates/1.0.8 tc@<tinycore-ip>:/tmp/agent
+```
+
+> **Important:** always use `scp`. Never transfer via copy-paste or FTP ASCII mode — text-mode transfers corrupt the ELF binary and produce `syntax error: unexpected ")"` at runtime.
+
+On TinyCore:
+
+```bash
+mkdir -p /opt/armada
+cp /tmp/agent /opt/armada/agent
+chmod 755 /opt/armada/agent
+```
+
+**3. Create env file**
+
+```bash
+mkdir -p /opt/armada
+
+cat > /opt/armada/agent.env <<'EOF'
+SERVER_URL=http://<server>:8070
+AGENT_JWT_SECRET=<shared_agent_secret>
+LOG_DIR=/opt/armada/logs
+LOG_TO_CONSOLE=false
+
+# JWT token TTL (seconds). Default is 300 (5 min).
+# TinyCore has no NTP by default — clock skew causes HTTP 401 on all
+# authenticated endpoints (command poll, metrics) while heartbeat still
+# succeeds (heartbeat has no JWT check).
+# Set a large TTL to tolerate clock drift until NTP is available.
+# This is an AGENT-SIDE variable — setting it on the server has no effect.
+AGENT_JWT_TTL_SECONDS=86400
+
+# Optional tuning
+# HEARTBEAT_INTERVAL_SECONDS=30
+# COMMAND_POLL_INTERVAL_SECONDS=30
+# METRICS_INTERVAL_SECONDS=60
+# REQUEST_TIMEOUT_SECONDS=10
+# MAX_RETRIES=3
+
+# Optional AI
+# AGENT_AI_PROVIDER=ollama
+# AGENT_AI_ENDPOINT=http://localhost:11434/v1/chat/completions
+# AGENT_AI_MODEL=llama3.2
+EOF
+
+chmod 600 /opt/armada/agent.env
+mkdir -p /opt/armada/logs
+```
+
+**4. Sync the system clock (required for JWT auth)**
+
+TinyCore has no NTP running by default. The agent generates JWT tokens that expire in 5 minutes — if the system clock is wrong, tokens appear expired on the server and all authenticated API calls return **HTTP 401**. The heartbeat endpoint has no auth and will still succeed even with a wrong clock, which makes this easy to miss.
+
+```bash
+# Check current time vs expected
+date
+
+# Option A: BusyBox ntpd (usually built-in)
+ntpd -q -p pool.ntp.org
+
+# Option B: install ntpdate via TCE
+tce-load -wi ntpdate
+ntpdate pool.ntp.org
+
+# Option C: set manually (replace with current UTC time)
+date -s "2026-04-07 10:30:00"
+
+# Verify
+date
+```
+
+**5. Create `armada-agent.sh` (BusyBox-compatible control script)**
+
+TinyCore BusyBox does not have a `start` command. Use a POSIX `case` script:
+
+```bash
+cat > /opt/armada/armada-agent.sh <<'EOF'
+#!/bin/sh
+# Armada Agent control script — BusyBox / TinyCore compatible
+
+PID_FILE=/var/run/armada-agent.pid
+
+start() {
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    echo "armada-agent already running (pid $(cat $PID_FILE))"
+    return 0
+  fi
+  set -a
+  . /opt/armada/agent.env
+  set +a
+  /opt/armada/agent >> /opt/armada/logs/agent.log 2>&1 &
+  echo $! > "$PID_FILE"
+  echo "armada-agent started (pid $!)"
+}
+
+stop() {
+  if [ -f "$PID_FILE" ]; then
+    kill "$(cat "$PID_FILE")" 2>/dev/null && echo "armada-agent stopped"
+    rm -f "$PID_FILE"
+  else
+    echo "armada-agent not running"
+  fi
+}
+
+status() {
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    echo "armada-agent running (pid $(cat $PID_FILE))"
+  else
+    echo "armada-agent not running"
+  fi
+}
+
+case "$1" in
+  start)   start ;;
+  stop)    stop ;;
+  restart) stop; sleep 1; start ;;
+  status)  status ;;
+  *)       echo "Usage: $0 {start|stop|restart|status}"; exit 1 ;;
+esac
+EOF
+
+chmod 755 /opt/armada/armada-agent.sh
+```
+
+Control commands:
+
+```bash
+/opt/armada/armada-agent.sh start
+/opt/armada/armada-agent.sh stop
+/opt/armada/armada-agent.sh restart
+/opt/armada/armada-agent.sh status
+```
+
+**6. Auto-start on boot via `/opt/bootlocal.sh`**
+
+```bash
+cat >> /opt/bootlocal.sh <<'EOF'
+
+# Sync clock (required for agent JWT auth)
+ntpd -q -p pool.ntp.org 2>/dev/null || true
+
+# Start Armada Agent
+/opt/armada/armada-agent.sh start
+EOF
+
+chmod 755 /opt/bootlocal.sh
+```
+
+**7. Persist all changes to disk**
+
+```bash
+filetool.sh -b
+```
+
+> Run `filetool.sh -b` after **every** file change. TinyCore's RAM filesystem loses all changes on reboot unless explicitly persisted.
+
+**8. Start and verify**
+
+```bash
+# Start agent immediately
+/opt/armada/armada-agent.sh start
+
+# Check status
+/opt/armada/armada-agent.sh status
+
+# Follow logs
+tail -f /opt/armada/logs/agent.log
+```
+
+**Troubleshooting:**
+
+- **HTTP 401 on command poll / metrics, but heartbeat succeeds**: clock skew. The agent generates a JWT with an `exp` claim based on its local clock. If the clock is behind the server's clock, the token arrives already expired — the server returns 401. Heartbeat has no JWT check, so it always succeeds regardless of clock skew, which makes this easy to miss.
+  - **Fix A (preferred):** sync the clock — `ntpd -q -p pool.ntp.org` or `date -s "<current-utc-time>"`.
+  - **Fix B (tolerance workaround):** add `AGENT_JWT_TTL_SECONDS=86400` to `/opt/armada/agent.env` so tokens are valid for 24 hours, absorbing the skew. This is already included in the env file template above.
+  - **Common mistake:** setting `AGENT_JWT_TTL_SECONDS` on the **server container** has no effect — it is an agent-side variable only. The server never reads it.
+- **`syntax error: unexpected ")"`**: wrong architecture binary. Run `uname -m` — if `i686`, use the `linux/386` binary, not `linux/amd64`.
+- **Binary looks like text / garbled**: file was transferred in text mode. Always use `scp`.
+- **Agent not visible in UI**: verify `SERVER_URL` and `AGENT_JWT_SECRET` in `/opt/armada/agent.env`, then restart with `armada-agent.sh restart`.
+- **Changes lost after reboot**: you forgot `filetool.sh -b`. Re-apply changes and save.
+- **Test connectivity**: `wget -q -O- http://<server>:8070/healthz` (TinyCore uses `wget`, not `curl`, by default).
+
+#### Manage Queued Commands (Cancel/Skip)
+
+To cancel or skip a queued command that hasn't been dispatched yet (e.g., incorrect binary in update queue):
+
+**API Endpoint:**
+```
+POST /api/agents/{agent_id}/commands/{command_id}/cancel
+DELETE /api/agents/{agent_id}/commands/{command_id}/cancel
+```
+
+**Authentication:** Admin JWT or session cookie required
+
+**Response (200 OK):**
+```json
+{
+  "id": 372,
+  "agent_id": "08685de0-10c8-434b-a8db-265ea6cc01f2",
+  "command_type": "agent_update",
+  "payload": "{\"version\":\"1.0.4-linux\"}",
+  "status": "cancelled",
+  "created_at": "2026-03-20T19:00:00Z"
+}
+```
+
+**Error Cases:**
+- `404 Not Found`: Command not found for this agent
+- `400 Bad Request`: Command is not in 'queued' status (e.g., already dispatched/completed)
+- `401 Unauthorized`: Missing/invalid admin credentials
+
+**Example (cURL):**
+```bash
+# Cancel command 372 for agent
+curl -X POST https://ai-endpoint.example.com/api/agents/08685de0-10c8-434b-a8db-265ea6cc01f2/commands/372/cancel \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json"
+```
+
+**Example (PowerShell):**
+```powershell
+$headers = @{
+    "Authorization" = "Bearer <admin_token>"
+    "Content-Type" = "application/json"
+}
+
+$response = Invoke-WebRequest `
+  -Uri "https://ai-endpoint.example.com/api/agents/08685de0-10c8-434b-a8db-265ea6cc01f2/commands/372/cancel" `
+  -Method POST `
+  -Headers $headers
+
+Write-Host "Command cancelled: $($response.Content | ConvertFrom-Json | Select-Object status)"
+```
+
+**Use Cases:**
+- Correct incorrect batches of queued updates (e.g., wrong binary version in FIFO queue)
+- Skip problematic commands before agent picks them up
+- Incident response when wrong command was queued
+
+**Important Notes:**
+- Only `queued` status commands can be cancelled
+- Dispatched/completed commands cannot be cancelled
+- Cancellation happens immediately (no agent interaction needed)
+- Useful for fixing command queue issues before agents pick them up
+
+#### Requeue Historical Commands
+
+To requeue a previously finished command (for example, `failed`, `cancelled`, or `succeeded`) as a fresh queued command:
+
+**API Endpoint:**
+```
+POST /api/agents/{agent_id}/commands/{command_id}/requeue
+```
+
+**Authentication:** Admin JWT or session cookie required
+
+**Response (201 Created):**
+```json
+{
+  "id": 401,
+  "agent_id": "08685de0-10c8-434b-a8db-265ea6cc01f2",
+  "command_type": "agent_update",
+  "payload": "{\"version\":\"1.0.8\"}",
+  "status": "queued",
+  "created_at": "2026-03-29T10:52:01Z"
+}
+```
+
+**Notes:**
+- Requeue creates a new command row; it does not mutate the original command.
+- Active commands (`queued` / `dispatched`) are not eligible for requeue.
+
+#### Self-Update History Reports
+
+Reports now include a dedicated **Self Update History** tab with filter controls.
+
+**API Endpoint:**
+```
+GET /api/reports/self-updates?from=<datetime>&to=<datetime>&status=<status>&target_version=<version>&agent_id=<id>&hostname=<substring>&limit=<n>
+```
+
+**Purpose:**
+- Query self-update queue/install history across agents
+- Filter by date range, status, target version, exact agent ID, and hostname substring
+
+#### References
+
+- [README.md](README.md): Agent install and update details
+- [RELEASE_NOTES.md](RELEASE_NOTES.md): Latest release summary
+- [RELEASE_PR_NOTE.md](RELEASE_PR_NOTE.md): Detailed rollout notes
 
 ## Getting Help
 

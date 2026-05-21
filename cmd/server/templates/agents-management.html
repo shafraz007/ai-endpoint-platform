@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Armada Platform - Agent Management</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { width: 100%; max-width: none; margin: 0 auto; }
+        header {
+            background: #fff;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        h1 { color: #333; font-size: 2em; margin-bottom: 6px; }
+        .header-info { color: #666; font-size: 14px; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .ghost-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-top: 14px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .stat-number { font-size: 1.8em; font-weight: bold; color: #667eea; }
+        .stat-label { color: #666; font-size: 13px; margin-top: 4px; }
+
+        .table-wrapper {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .list-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 14px 15px 0 15px;
+            margin-bottom: 12px;
+        }
+        .list-controls-left, .list-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .pager-info { color: #666; font-size: 12px; }
+        .limit-select, .agents-search {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            background: #fff;
+        }
+        .agents-search { min-width: 260px; }
+        .pager-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .pager-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #f8f9fa; border-bottom: 2px solid #ddd; }
+        th {
+            padding: 15px;
+            text-align: left;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+        tr:hover { background: #f8f9fa; }
+        tr:last-child td { border-bottom: none; }
+
+        .hostname { font-weight: 500; color: #333; }
+        .timestamp { color: #999; font-size: 13px; }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-online { background: #d4edda; color: #155724; }
+        .status-offline { background: #f8d7da; color: #721c24; }
+
+        .agent-actions-cell { position: relative; width: 110px; }
+        .agent-actions-btn {
+            background: transparent;
+            color: #667eea;
+            border: 1px solid #c7d2fe;
+            padding: 6px 10px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .agent-actions-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 4px);
+            min-width: 180px;
+            background: #fff;
+            border: 1px solid #e6eaed;
+            border-radius: 8px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+            z-index: 30;
+            overflow: hidden;
+        }
+        .agent-actions-cell.open .agent-actions-menu { display: block; }
+        .agent-actions-menu button,
+        .agent-actions-menu a {
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: none;
+            background: #fff;
+            color: #333;
+            padding: 10px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .agent-actions-menu button:hover,
+        .agent-actions-menu a:hover { background: #f5f7fb; }
+        .agent-actions-menu .danger { color: #b91c1c; }
+
+        .status-line {
+            margin-top: 10px;
+            color: #666;
+            font-size: 13px;
+            min-height: 18px;
+        }
+        .status-line.ok { color: #166534; }
+        .status-line.error { color: #b91c1c; }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .footer {
+            text-align: center;
+            color: #fff;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>🧩 Agent Management</h1>
+                    <p class="header-info">Full page management for all registered agents</p>
+                </div>
+                <div class="header-actions">
+                    <a class="ghost-btn" href="/agents">Back to Dashboard</a>
+                    <a class="ghost-btn" href="/settings">Governance</a>
+                    <button id="bulk-update-selected" class="ghost-btn" type="button">Queue Update (Selected)</button>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">{{.TotalAgents}}</div>
+                    <div class="stat-label">Total Agents</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{.OnlineAgents}}</div>
+                    <div class="stat-label">Online Agents</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{.OfflineAgents}}</div>
+                    <div class="stat-label">Offline Agents</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="table-wrapper">
+            {{if .Agents}}
+            <div class="list-controls">
+                <div class="list-controls-left">
+                    <label for="agents-limit" class="pager-info">Rows per page</label>
+                    <select id="agents-limit" class="limit-select">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <input id="agents-search" class="agents-search" type="text" placeholder="Search hostname, agent ID, IP, domain, status...">
+                </div>
+                <div class="list-controls-right">
+                    <button id="agents-prev" class="pager-btn" type="button">Prev</button>
+                    <span id="agents-page-info" class="pager-info">Page 1</span>
+                    <button id="agents-next" class="pager-btn" type="button">Next</button>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th><input id="select-all-agents" type="checkbox" title="Select all" /></th>
+                        <th>Hostname</th>
+                        <th>Agent ID</th>
+                        <th>Domain</th>
+                        <th>Private IP</th>
+                        <th>Public IP</th>
+                        <th>Status</th>
+                        <th>Version</th>
+                        <th>Timezone</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="agents-table-body">
+                    {{range .Agents}}
+                    <tr onclick="window.location.href='/agents/{{.AgentID}}';" style="cursor:pointer;" data-agent-id="{{.AgentID}}">
+                        <td onclick="event.stopPropagation()"><input class="agent-select" type="checkbox" value="{{.AgentID}}" /></td>
+                        <td><span class="hostname">{{.Hostname}}</span></td>
+                        <td><code style="background:#f5f5f5; padding:3px 8px; border-radius:3px; font-size:12px;">{{.AgentID}}</code></td>
+                        <td>{{if .Domain}}{{.Domain}}{{else}}<span style="color:#ccc;">-</span>{{end}}</td>
+                        <td>{{if .PrivateIP}}{{.PrivateIP}}{{else}}<span style="color:#ccc;">-</span>{{end}}</td>
+                        <td>{{if .PublicIP}}{{.PublicIP}}{{else}}<span style="color:#ccc;">-</span>{{end}}</td>
+                        <td><span class="status-badge status-{{.Status}}">{{.Status}}</span></td>
+                        <td>{{if .AgentVersion}}{{.AgentVersion}}{{else}}<span style="color:#ccc;">-</span>{{end}}</td>
+                        <td>{{if .Timezone}}{{.Timezone}}{{else}}<span style="color:#ccc;">-</span>{{end}}</td>
+                        <td><span class="timestamp">{{.LastSeen.Format "2006-01-02 15:04:05"}}</span></td>
+                        <td class="agent-actions-cell" onclick="event.stopPropagation()">
+                            <button type="button" class="agent-actions-btn" data-agent-actions-toggle>Actions ▾</button>
+                            <div class="agent-actions-menu">
+                                <a href="/agents/{{.AgentID}}">View Details</a>
+                                <button type="button" class="danger" data-agent-delete-id="{{.AgentID}}">Delete Agent</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            <div class="list-controls" style="padding-top: 10px; border-top: none; justify-content: flex-end;">
+                <div class="list-controls-right">
+                    <button id="agents-prev-bottom" class="pager-btn" type="button">Prev</button>
+                    <span id="agents-page-info-bottom" class="pager-info">Page 1</span>
+                    <button id="agents-next-bottom" class="pager-btn" type="button">Next</button>
+                </div>
+            </div>
+            <div id="agents-status" class="status-line"></div>
+            {{else}}
+            <div class="no-data"><p>No agents registered yet</p></div>
+            {{end}}
+        </div>
+
+        <div class="footer">
+            <p>Armada Platform • Last updated: {{.LastUpdated}}</p>
+        </div>
+    </div>
+
+    <script>
+        const pagination = { agents: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+
+        function setStatus(message, type) {
+            const el = document.getElementById('agents-status');
+            if (!el) return;
+            el.textContent = message || '';
+            el.className = 'status-line' + (type ? (' ' + type) : '');
+        }
+
+        function paginateArray(items, page, limit) {
+            const safeItems = Array.isArray(items) ? items : [];
+            const safeLimit = Math.max(1, Number(limit) || 1);
+            const total = safeItems.length;
+            const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+            const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+            const start = (currentPage - 1) * safeLimit;
+            const paged = safeItems.slice(start, start + safeLimit);
+            return { paged, total, totalPages, currentPage };
+        }
+
+        function updatePagerControls() {
+            const info = document.getElementById('agents-page-info');
+            const prev = document.getElementById('agents-prev');
+            const next = document.getElementById('agents-next');
+            const infoBottom = document.getElementById('agents-page-info-bottom');
+            const prevBottom = document.getElementById('agents-prev-bottom');
+            const nextBottom = document.getElementById('agents-next-bottom');
+            if (info) info.textContent = `Page ${pagination.agents.page} / ${pagination.agents.totalPages} • ${pagination.agents.total} item(s)`;
+            if (infoBottom) infoBottom.textContent = `Page ${pagination.agents.page} / ${pagination.agents.totalPages} • ${pagination.agents.total} item(s)`;
+            if (prev) prev.disabled = pagination.agents.page <= 1;
+            if (next) next.disabled = pagination.agents.page >= pagination.agents.totalPages;
+            if (prevBottom) prevBottom.disabled = pagination.agents.page <= 1;
+            if (nextBottom) nextBottom.disabled = pagination.agents.page >= pagination.agents.totalPages;
+        }
+
+        function getFilteredRows() {
+            const tbody = document.getElementById('agents-table-body');
+            if (!tbody) return [];
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const search = document.getElementById('agents-search');
+            const query = String(search && search.value || '').trim().toLowerCase();
+            if (!query) return rows;
+            return rows.filter((row) => String(row.textContent || '').toLowerCase().includes(query));
+        }
+
+        function renderAgentsPage() {
+            const tbody = document.getElementById('agents-table-body');
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const filtered = getFilteredRows();
+            const result = paginateArray(filtered, pagination.agents.page, pagination.agents.limit);
+
+            pagination.agents.page = result.currentPage;
+            pagination.agents.total = result.total;
+            pagination.agents.totalPages = result.totalPages;
+
+            rows.forEach((row) => { row.style.display = 'none'; });
+            result.paged.forEach((row) => { row.style.display = ''; });
+            updatePagerControls();
+        }
+
+        function closeAllMenus() {
+            document.querySelectorAll('.agent-actions-cell.open').forEach((cell) => cell.classList.remove('open'));
+        }
+
+        async function deleteAgent(agentID) {
+            const safeID = String(agentID || '').trim();
+            if (!safeID) return;
+
+            const ok = confirm('Delete agent ' + safeID + '? This also removes related commands, metrics, chat history, schedules, and issues.');
+            if (!ok) return;
+
+            try {
+                const response = await fetch('/api/agents/' + encodeURIComponent(safeID), {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error((msg && msg.trim()) ? msg.trim() : ('Delete failed: ' + response.status));
+                }
+
+                const row = document.querySelector('tr[data-agent-id="' + safeID.replace(/"/g, '\\"') + '"]');
+                if (row && row.parentNode) row.parentNode.removeChild(row);
+
+                pagination.agents.page = 1;
+                renderAgentsPage();
+                setStatus('Agent deleted successfully.', 'ok');
+            } catch (err) {
+                setStatus(err.message || 'Failed to delete agent.', 'error');
+            }
+        }
+
+        function getSelectedAgentIDs() {
+            return Array.from(document.querySelectorAll('.agent-select:checked'))
+                .map((el) => String(el.value || '').trim())
+                .filter(Boolean);
+        }
+
+        async function queueBulkAgentUpdate(agentIDs) {
+            if (!Array.isArray(agentIDs) || agentIDs.length === 0) {
+                setStatus('Select at least one agent.', 'error');
+                return;
+            }
+
+            const confirmed = confirm('Queue agent self-update for ' + agentIDs.length + ' selected agent(s)?');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/agent-update/install/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        agent_ids: agentIDs,
+                        ttl_minutes: 60,
+                    }),
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/session-timeout?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                if (!response.ok) {
+                    const msg = await response.text();
+                    throw new Error((msg && msg.trim()) ? msg.trim() : ('Bulk update queue failed: ' + response.status));
+                }
+
+                const result = await response.json();
+                const queuedCount = Number(result.queued_count || 0);
+                const errorCount = Number(result.error_count || 0);
+                setStatus('Queued updates for ' + queuedCount + ' agent(s).' + (errorCount > 0 ? (' Errors: ' + errorCount + '.') : ''), errorCount > 0 ? 'error' : 'ok');
+            } catch (err) {
+                setStatus(err.message || 'Failed to queue bulk update.', 'error');
+            }
+        }
+
+        const agentsLimit = document.getElementById('agents-limit');
+        const agentsSearch = document.getElementById('agents-search');
+        const agentsPrev = document.getElementById('agents-prev');
+        const agentsNext = document.getElementById('agents-next');
+        const agentsPrevBottom = document.getElementById('agents-prev-bottom');
+        const agentsNextBottom = document.getElementById('agents-next-bottom');
+        const selectAllAgents = document.getElementById('select-all-agents');
+        const bulkUpdateSelectedButton = document.getElementById('bulk-update-selected');
+
+        if (agentsLimit) {
+            agentsLimit.addEventListener('change', () => {
+                pagination.agents.limit = Number(agentsLimit.value) || 20;
+                pagination.agents.page = 1;
+                renderAgentsPage();
+            });
+        }
+        if (agentsSearch) {
+            agentsSearch.addEventListener('input', () => {
+                pagination.agents.page = 1;
+                renderAgentsPage();
+            });
+        }
+        if (agentsPrev) {
+            agentsPrev.addEventListener('click', () => {
+                pagination.agents.page = Math.max(1, pagination.agents.page - 1);
+                renderAgentsPage();
+            });
+        }
+        if (agentsNext) {
+            agentsNext.addEventListener('click', () => {
+                pagination.agents.page = pagination.agents.page + 1;
+                renderAgentsPage();
+            });
+        }
+        if (agentsPrevBottom) {
+            agentsPrevBottom.addEventListener('click', () => {
+                pagination.agents.page = Math.max(1, pagination.agents.page - 1);
+                renderAgentsPage();
+            });
+        }
+        if (agentsNextBottom) {
+            agentsNextBottom.addEventListener('click', () => {
+                pagination.agents.page = pagination.agents.page + 1;
+                renderAgentsPage();
+            });
+        }
+
+        document.querySelectorAll('[data-agent-actions-toggle]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const cell = btn.closest('.agent-actions-cell');
+                if (!cell) return;
+                const opening = !cell.classList.contains('open');
+                closeAllMenus();
+                if (opening) cell.classList.add('open');
+            });
+        });
+
+        document.querySelectorAll('[data-agent-delete-id]').forEach((btn) => {
+            btn.addEventListener('click', async (event) => {
+                event.stopPropagation();
+                closeAllMenus();
+                await deleteAgent(btn.getAttribute('data-agent-delete-id'));
+            });
+        });
+
+        if (selectAllAgents) {
+            selectAllAgents.addEventListener('change', () => {
+                const checked = !!selectAllAgents.checked;
+                document.querySelectorAll('.agent-select').forEach((box) => {
+                    box.checked = checked;
+                });
+            });
+        }
+
+        document.querySelectorAll('.agent-select').forEach((box) => {
+            box.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+            box.addEventListener('change', () => {
+                if (!selectAllAgents) return;
+                const all = Array.from(document.querySelectorAll('.agent-select'));
+                selectAllAgents.checked = all.length > 0 && all.every((item) => item.checked);
+            });
+        });
+
+        if (bulkUpdateSelectedButton) {
+            bulkUpdateSelectedButton.addEventListener('click', async () => {
+                const selected = getSelectedAgentIDs();
+                await queueBulkAgentUpdate(selected);
+            });
+        }
+
+        document.addEventListener('click', () => closeAllMenus());
+
+        renderAgentsPage();
+    </script>
+</body>
+</html>

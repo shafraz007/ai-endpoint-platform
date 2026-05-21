@@ -34,6 +34,20 @@ type scheduleExecutionReportResponse struct {
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 }
 
+type agentUpdateHistoryReportResponse struct {
+	ID            int64      `json:"id"`
+	AgentID       string     `json:"agent_id"`
+	AgentHostname string     `json:"agent_hostname,omitempty"`
+	CommandID     *int64     `json:"command_id,omitempty"`
+	TargetVersion string     `json:"target_version"`
+	Status        string     `json:"status"`
+	Result        string     `json:"result"`
+	Output        string     `json:"output,omitempty"`
+	Error         string     `json:"error,omitempty"`
+	QueuedAt      time.Time  `json:"queued_at"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+}
+
 func reportsPageHandler(cfg config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -49,7 +63,8 @@ func reportsPageHandler(cfg config.ServerConfig) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = reportsTemplate.Execute(w, map[string]interface{}{
-			"Now": time.Now().Format("2006-01-02 15:04:05"),
+			"Now":             time.Now().Format("2006-01-02 15:04:05"),
+			"DisplayTimezone": cfg.DisplayTimezone,
 		})
 	}
 }
@@ -110,6 +125,86 @@ func scheduleExecutionReportsHandler(cfg config.ServerConfig) http.HandlerFunc {
 	}
 }
 
+func osPatchRolloutTelemetryHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, _, err := authorizeAdminRequest(w, r, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		recentLimit := 30
+		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+			recentLimit = parsed
+		}
+
+		ctx := r.Context()
+		report, err := server.CollectUpdateRolloutTelemetry(ctx, recentLimit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		respondJSON(w, http.StatusOK, report)
+	}
+}
+
+func selfUpdateHistoryReportsHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, _, err := authorizeAdminRequest(w, r, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		filter, err := parseAgentUpdateHistoryReportFilter(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		reports, err := server.ListAgentUpdateHistoryReports(r.Context(), filter)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		resp := make([]agentUpdateHistoryReportResponse, 0, len(reports))
+		for _, item := range reports {
+			result := strings.ToLower(strings.TrimSpace(item.Status))
+			if result == "" {
+				result = "unknown"
+			}
+			resp = append(resp, agentUpdateHistoryReportResponse{
+				ID:            item.ID,
+				AgentID:       item.AgentID,
+				AgentHostname: item.AgentHostname,
+				CommandID:     item.CommandID,
+				TargetVersion: item.TargetVersion,
+				Status:        item.Status,
+				Result:        result,
+				Output:        item.Output,
+				Error:         item.Error,
+				QueuedAt:      item.QueuedAt,
+				CompletedAt:   item.CompletedAt,
+			})
+		}
+
+		respondJSON(w, http.StatusOK, resp)
+	}
+}
+
 func parseScheduleExecutionReportFilter(r *http.Request) (server.ScheduleExecutionReportFilter, error) {
 	q := r.URL.Query()
 	var filter server.ScheduleExecutionReportFilter
@@ -158,6 +253,45 @@ func parseScheduleExecutionReportFilter(r *http.Request) (server.ScheduleExecuti
 		}
 		filter.GroupID = &parsed
 	}
+
+	return filter, nil
+}
+
+func parseAgentUpdateHistoryReportFilter(r *http.Request) (server.AgentUpdateHistoryReportFilter, error) {
+	q := r.URL.Query()
+	var filter server.AgentUpdateHistoryReportFilter
+	filter.AgentID = strings.TrimSpace(q.Get("agent_id"))
+	filter.HostnameLike = strings.TrimSpace(q.Get("hostname"))
+	filter.Status = strings.ToLower(strings.TrimSpace(q.Get("status")))
+	filter.TargetVersion = strings.TrimSpace(q.Get("target_version"))
+
+	limit := 200
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return filter, fmt.Errorf("invalid limit")
+		}
+		limit = parsed
+	}
+	filter.Limit = limit
+
+	from, err := parseDateTimeQuery(q.Get("from"))
+	if err != nil {
+		return filter, fmt.Errorf("invalid from")
+	}
+	to, err := parseDateTimeQuery(q.Get("to"))
+	if err != nil {
+		return filter, fmt.Errorf("invalid to")
+	}
+
+	if from.IsZero() {
+		from = time.Now().UTC().Add(-30 * 24 * time.Hour)
+	}
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	filter.From = from
+	filter.To = to
 
 	return filter, nil
 }

@@ -66,6 +66,13 @@ type osPatchPolicyRequest struct {
 	PostponedKBs        []string  `json:"postponed_kbs"`
 }
 
+type updateRolloutPolicyResponse struct {
+	Policy              server.UpdateRolloutPolicy         `json:"policy"`
+	EffectiveActiveRing int                                `json:"effective_active_ring"`
+	HealthSnapshot      server.UpdateRolloutHealthSnapshot `json:"health_snapshot"`
+	OverrideActive      bool                               `json:"override_active"`
+}
+
 func governancePageHandler(cfg config.ServerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -283,6 +290,93 @@ func osPatchUpdatesActionHandler(cfg config.ServerConfig) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func updateRolloutPolicyHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, _, err := authorizeAdminRequest(w, r, cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+
+			policy, effectiveRing, snapshot, err := server.GetUpdateRolloutControlStatus(ctx)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, overrideActive := server.GetUpdateRolloutPolicyOverride()
+			respondJSON(w, http.StatusOK, updateRolloutPolicyResponse{
+				Policy:              policy,
+				EffectiveActiveRing: effectiveRing,
+				HealthSnapshot:      snapshot,
+				OverrideActive:      overrideActive,
+			})
+
+		case http.MethodPut:
+			var req server.UpdateRolloutPolicy
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				return
+			}
+
+			if _, err := server.SetUpdateRolloutPolicyOverride(req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			policy, effectiveRing, snapshot, err := server.GetUpdateRolloutControlStatus(ctx)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			respondJSON(w, http.StatusOK, updateRolloutPolicyResponse{
+				Policy:              policy,
+				EffectiveActiveRing: effectiveRing,
+				HealthSnapshot:      snapshot,
+				OverrideActive:      true,
+			})
+
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+func updateRolloutPolicyResetHandler(cfg config.ServerConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if _, _, err := authorizeAdminRequest(w, r, cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		server.ClearUpdateRolloutPolicyOverride()
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		policy, effectiveRing, snapshot, err := server.GetUpdateRolloutControlStatus(ctx)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, http.StatusOK, updateRolloutPolicyResponse{
+			Policy:              policy,
+			EffectiveActiveRing: effectiveRing,
+			HealthSnapshot:      snapshot,
+			OverrideActive:      false,
+		})
 	}
 }
 
